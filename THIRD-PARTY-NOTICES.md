@@ -10,6 +10,8 @@ NetworkScanner bundles or depends on the following third-party components.
 | [IBM Plex Sans / Mono](https://github.com/IBM/plex) (`assets/fonts/`) | SIL OFL 1.1 | UI and data fonts |
 | [Inter font](https://github.com/rsms/inter) (via Avalonia.Fonts.Inter) | SIL OFL 1.1 | Fallback font |
 | [Velopack](https://github.com/velopack/velopack) | MIT | Installers and in-app updates |
+| [PDFsharp](https://github.com/empira/PDFsharp) 6.2 | MIT | PDF reports |
+| [Nanum Gothic](https://github.com/google/fonts/tree/main/ofl/nanumgothic) (`assets/fonts/NanumGothic*.ttf`, licence text in `NanumGothic-OFL.txt`) | SIL OFL 1.1 | Korean glyphs in PDF reports |
 | [FluentFTP](https://github.com/robinrodricks/FluentFTP) | MIT | FTP / FTPS upload |
 | [SSH.NET](https://github.com/sshnet/SSH.NET) | MIT | SFTP upload |
 | [Microsoft.Data.Sqlite](https://github.com/dotnet/efcore) + [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) | MIT / Apache-2.0 | Scan history database |

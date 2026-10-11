@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>netscan-collector</AssemblyName>
+    <RootNamespace>NetworkScanner.Collector</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RollForward>LatestMajor</RollForward>
+    <Version>1.7.5</Version>
+    <UserSecretsId>NetworkScanner.Collector</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 업로드 색인(collector.db)용 SQLite. Core의 ScanHistoryStore와 같은 버전을 쓴다. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 스캐너가 만든 CSV를 같은 규칙(RFC 4180 + 수식 방어 따옴표)으로 읽기 위해 Core의 CsvCodec을 참조한다. -->
+    <ProjectReference Include="..\NetworkScanner.Core\NetworkScanner.Core.csproj" />
+  </ItemGroup>
+
+</Project>

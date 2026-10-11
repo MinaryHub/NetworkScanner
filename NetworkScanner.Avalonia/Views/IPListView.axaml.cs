@@ -4,9 +4,12 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using NetworkScanner.Alerts;
 using NetworkScanner.Avalonia.Helpers;
+using NetworkScanner.Reports;
 
 namespace NetworkScanner.Avalonia.Views
 {
@@ -24,14 +27,22 @@ namespace NetworkScanner.Avalonia.Views
 
         // 엔진 이벤트를 UI 스레드에서 다시 내보낸다. MainWindow가 알림 전송/outbox 갱신에 쓴다.
         public event Action<IReadOnlyList<ScanChange>>? ChangesDetected;
+        // 알림 운영 규칙(중복 억제/확인/스누즈/점검 시간대)을 거친 결과. 외부 채널 알림은 이것의 ChangesToNotify만 보낸다.
+        public event Action<AlertOutcome>? AlertsProcessed;
         public event Action? ScanFinished;
+        // 상단 프로필 콤보로 스캔 프로필을 바꿔 저장했을 때(설정 화면이 따라오도록).
+        public event Action<string>? ProfileChanged;
 
         public ScanServices? Services => _engine?.Services;
+
+        // 프로필 콤보를 코드로 채우는 동안 SelectionChanged가 저장을 일으키지 않도록 막는다.
+        private bool _profileSyncing;
 
         public IPListView()
         {
             InitializeComponent();
             _oui.LoadInfo();
+            BuildProfileCombo();
             // DataGrid는 절대 라이브 컬렉션(_items)에 직접 바인딩하지 않는다. 병렬 스캔이 백그라운드
             // 스레드에서 _items를 수정하면 Avalonia가 UI 스레드가 아닌 곳에서 CollectionChanged를
             // 처리하려다 교착/예외에 빠지기 때문이다. 항상 락으로 뜬 스냅샷(복사본)만 바인딩한다.
@@ -42,6 +53,9 @@ namespace NetworkScanner.Avalonia.Views
         {
             Config = config;
             _engine = new ScanEngine(_items, _oui, Config, services, options);
+            if (options != null) SetProfile(ScanProfiles.Name(options.Profile));
+            // 이력 DB가 없으면 승인 자체가 불가능하므로 메뉴를 비활성화한다.
+            SetMenuItemEnabled("MenuItemApprove", services?.History != null);
             _engine.Message += msg => Dispatcher.UIThread.Post(() => TbStatusLine.Text = msg);
             _engine.ProgressMaxChanged += max => Dispatcher.UIThread.Post(() =>
             {
@@ -74,8 +88,65 @@ namespace NetworkScanner.Avalonia.Views
                 ReportChanges(changes);
                 ChangesDetected?.Invoke(changes);
             });
+            _engine.AlertsProcessed += outcome => Dispatcher.UIThread.Post(() => AlertsProcessed?.Invoke(outcome));
 
             _engine.InitFromConfig();
+        }
+
+        // ---- 스캔 프로필 ----
+
+        private void BuildProfileCombo()
+        {
+            _profileSyncing = true;
+            foreach (ScanProfileKind kind in ScanProfiles.All)
+                CmbProfile.Items.Add(new ComboBoxItem { Content = ScanProfiles.DisplayName(kind), Tag = ScanProfiles.Name(kind) });
+            CmbProfile.SelectedIndex = ScanProfiles.All.ToList().IndexOf(ScanProfileKind.Standard);
+            _profileSyncing = false;
+        }
+
+        // 설정 화면에서 저장한 프로필을 콤보에 반영한다(저장은 하지 않음).
+        public void SetProfile(string name)
+        {
+            string tag = ScanProfiles.Name(ScanProfiles.Parse(name));
+            _profileSyncing = true;
+            try
+            {
+                for (int i = 0; i < CmbProfile.Items.Count; i++)
+                {
+                    if (CmbProfile.Items[i] is ComboBoxItem item && (item.Tag as string) == tag) { CmbProfile.SelectedIndex = i; break; }
+                }
+            }
+            finally { _profileSyncing = false; }
+        }
+
+        // 사용자가 콤보에서 고르면: 설정 파일에 저장 → 엔진 옵션 갱신 → 설정 화면에 통보.
+        private void CmbProfile_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_profileSyncing || _engine == null) return;
+            if ((CmbProfile.SelectedItem as ComboBoxItem)?.Tag is not string tag) return;
+
+            try
+            {
+                AppSettingsData data = AppSettingsStore.LoadSettings();
+                data.ScanProfile = tag;
+                AppSettingsStore.SaveSettings(data);
+                ApplyOptions(ScanOptions.FromSettings(data));
+                ProfileChanged?.Invoke(tag);
+                TbMsg.Text = string.Format(Localization.T("msg.profile.applied"), ScanProfiles.DisplayName(ScanProfiles.Parse(tag)));
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "profile change failed", ex);
+                TbMsg.Text = ex.Message;
+            }
+        }
+
+        // ContextMenu 안의 항목은 이름 범위로 못 찾을 수 있어 Items를 직접 훑는다.
+        private void SetMenuItemEnabled(string name, bool enabled)
+        {
+            if (DgIPList.ContextMenu is not ContextMenu menu) return;
+            foreach (object? item in menu.Items)
+                if (item is MenuItem mi && mi.Name == name) mi.IsEnabled = enabled;
         }
 
         // 직전 스캔 대비 변화를 로그에 남기고, 보안상 중요한 변화(MAC 변경/위험 포트)는 팝업으로 경고한다.
@@ -138,10 +209,10 @@ namespace NetworkScanner.Avalonia.Views
             DgIPList.ItemsSource = shown;
             TbResult.Text = shown.Count.ToString();
 
-            // 위험 포트 호스트 수는 요약 이벤트에 없으므로 스냅샷에서 센다. 0이면 타일을 조용한 흰색으로 둔다.
+            // 위험(위험 포트 또는 고위험 점수) 호스트 수는 요약 이벤트에 없으므로 스냅샷에서 센다. 0이면 타일을 조용한 흰색으로 둔다.
             int risk;
             object sync = _engine?.ItemsSyncRoot ?? _items;
-            lock (sync) risk = _items.Count(i => i.HasProhibitedPort);
+            lock (sync) risk = _items.Count(i => i.StatusKey == "warn");
             TbRisk.Text = risk.ToString();
             TileRisk.Classes.Set("risk", risk > 0);
         }
@@ -158,7 +229,7 @@ namespace NetworkScanner.Avalonia.Views
             {
                 return _items.Where(i =>
                         (!aliveOnly || i.Alive)
-                        && (!riskOnly || i.HasProhibitedPort)
+                        && (!riskOnly || i.StatusKey == "warn")
                         && (string.IsNullOrEmpty(keyword) || Matches(i, keyword)))
                     .ToList();
             }
@@ -266,27 +337,81 @@ namespace NetworkScanner.Avalonia.Views
 
             var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
-                Title = "리포트 저장 (HTML/JSON)",
+                Title = Localization.T("btn.report.all"),
                 SuggestedFileName = $"NetworkScanner_{System.DateTime.Now:yyyyMMdd_HHmmss}.html",
                 DefaultExtension = "html",
                 FileTypeChoices = new[]
                 {
                     new FilePickerFileType("HTML") { Patterns = new[] { "*.html" } },
+                    new FilePickerFileType("PDF") { Patterns = new[] { "*.pdf" } },
                     new FilePickerFileType("JSON") { Patterns = new[] { "*.json" } },
                 },
             });
             if (file == null) return;
 
             string ts = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            bool json = file.Name.EndsWith(".json", System.StringComparison.OrdinalIgnoreCase);
-            string content = json
-                ? ReportGenerator.BuildJson(snapshot, Config?.GetSystemName() ?? "", ts)
-                : ReportGenerator.BuildHtml(snapshot, Config?.GetSystemName() ?? "", ts);
+            string systemName = Config?.GetSystemName() ?? "";
+            try
+            {
+                // PDF는 바이너리라 Core의 PdfReport가 직접 파일로 쓴다(임베드 폰트로 한글 포함).
+                if (file.Name.EndsWith(".pdf", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    string? path = file.TryGetLocalPath();
+                    if (string.IsNullOrEmpty(path)) { TbMsg.Text = string.Format(Localization.T("msg.report.savefailed"), file.Name); return; }
+                    await PdfReport.SaveAsync(path, snapshot, systemName, ts);
+                    TbMsg.Text = Localization.T("msg.report.saved.pdf");
+                    return;
+                }
 
-            await using var stream = await file.OpenWriteAsync();
-            await using var writer = new StreamWriter(stream);
-            await writer.WriteAsync(content);
-            TbMsg.Text = json ? Localization.T("msg.report.saved.json") : Localization.T("msg.report.saved.html");
+                bool json = file.Name.EndsWith(".json", System.StringComparison.OrdinalIgnoreCase);
+                string content = json
+                    ? ReportGenerator.BuildJson(snapshot, systemName, ts)
+                    : ReportGenerator.BuildHtml(snapshot, systemName, ts);
+
+                await using var stream = await file.OpenWriteAsync();
+                await using var writer = new StreamWriter(stream);
+                await writer.WriteAsync(content);
+                TbMsg.Text = json ? Localization.T("msg.report.saved.json") : Localization.T("msg.report.saved.html");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "report save failed", ex);
+                TbMsg.Text = string.Format(Localization.T("msg.report.savefailed"), ex.Message);
+            }
+        }
+
+        // ---- 상세 / 자산 승인 ----
+
+        private void DgIPList_DoubleTapped(object? sender, TappedEventArgs e) => ShowDetails();
+
+        private void MenuItemDetails_Click(object? sender, RoutedEventArgs e) => ShowDetails();
+
+        private void ShowDetails()
+        {
+            if (SelectedItem == null || TopLevel.GetTopLevel(this) is not Window owner) return;
+            var dialog = new HostDetailsWindow();
+            dialog.Load(SelectedItem);
+            _ = dialog.ShowDialog(owner);
+        }
+
+        // 선택한 호스트를 알려진 자산으로 승인(이력 DB의 hosts.approved). 현재 MAC이 승인 MAC으로 고정된다.
+        private void MenuItemApprove_Click(object? sender, RoutedEventArgs e)
+        {
+            IPInfo? info = SelectedItem;
+            var history = Services?.History;
+            if (info == null || history == null) return;
+            try
+            {
+                history.SetApproved(new[] { info.Ip }, true, DateTimeOffset.Now);
+                info.Approved = true;
+                RefreshGrid();
+                TbMsg.Text = string.Format(Localization.T("msg.asset.approved"), 1);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "approve failed", ex);
+                TbMsg.Text = ex.Message;
+            }
         }
 
         private async void MenuItemWakeOnLan_Click(object? sender, RoutedEventArgs e)

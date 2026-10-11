@@ -14,7 +14,7 @@ namespace NetworkScanner.History
     {
         public static string DefaultPath => UserDataPaths.Resolve("history.db");
 
-        private const int CurrentSchemaVersion = 1;
+        private const int CurrentSchemaVersion = 2;
 
         private readonly object _gate = new();
         private readonly SqliteConnection _conn;
@@ -64,6 +64,7 @@ namespace NetworkScanner.History
                 switch (v)
                 {
                     case 1: MigrateV1(tx); break;
+                    case 2: MigrateV2(tx); break;
                 }
                 using (var cmd = _conn.CreateCommand())
                 {
@@ -120,6 +121,38 @@ CREATE INDEX IF NOT EXISTS ix_scans_started_at ON scans(started_at);
 ", tx);
         }
 
+        // v2: 자산 승인/소유자/태그(hosts), 식별·취약점 결과(scan_hosts), 알림 상태(alerts).
+        private void MigrateV2(SqliteTransaction tx)
+        {
+            Exec(@"
+ALTER TABLE hosts ADD COLUMN approved     INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE hosts ADD COLUMN approved_at  TEXT NOT NULL DEFAULT '';
+ALTER TABLE hosts ADD COLUMN approved_mac TEXT NOT NULL DEFAULT '';
+ALTER TABLE hosts ADD COLUMN owner        TEXT NOT NULL DEFAULT '';
+ALTER TABLE hosts ADD COLUMN tags         TEXT NOT NULL DEFAULT '';
+ALTER TABLE hosts ADD COLUMN note         TEXT NOT NULL DEFAULT '';
+ALTER TABLE hosts ADD COLUMN last_risk    INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE scan_hosts ADD COLUMN sys_descr  TEXT NOT NULL DEFAULT '';
+ALTER TABLE scan_hosts ADD COLUMN risk_score INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE scan_hosts ADD COLUMN findings   TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS alerts(
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    key              TEXT NOT NULL UNIQUE,
+    type             INTEGER NOT NULL,
+    ip               TEXT NOT NULL,
+    detail           TEXT NOT NULL DEFAULT '',
+    first_seen       TEXT NOT NULL,
+    last_seen        TEXT NOT NULL,
+    count            INTEGER NOT NULL DEFAULT 1,
+    state            INTEGER NOT NULL DEFAULT 0,
+    snooze_until     TEXT NOT NULL DEFAULT '',
+    last_notified_at TEXT NOT NULL DEFAULT '',
+    note             TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_alerts_state ON alerts(state);
+", tx);
+        }
+
         // ---- 쓰기 ----
 
         // 스캔 1건과 호스트 결과를 저장하고 hosts 인벤토리를 갱신한다. 반환값은 scans.id.
@@ -166,8 +199,8 @@ SELECT last_insert_rowid();";
                     hostCmd.Transaction = tx;
                     // 같은 IP가 두 번 들어와도(중복 범위 등) 마지막 값으로 덮어쓴다.
                     hostCmd.CommandText = @"
-INSERT OR REPLACE INTO scan_hosts(scan_id, ip, alive, mac, vendor, name, ports, service, rtt, ttl, has_prohibited)
-VALUES(@scan, @ip, @alive, @mac, @vendor, @name, @ports, @service, @rtt, @ttl, @prohibited);";
+INSERT OR REPLACE INTO scan_hosts(scan_id, ip, alive, mac, vendor, name, ports, service, rtt, ttl, has_prohibited, sys_descr, risk_score, findings)
+VALUES(@scan, @ip, @alive, @mac, @vendor, @name, @ports, @service, @rtt, @ttl, @prohibited, @sysdescr, @risk, @findings);";
                     var pIp = hostCmd.Parameters.Add("@ip", SqliteType.Text);
                     var pAlive = hostCmd.Parameters.Add("@alive", SqliteType.Integer);
                     var pMac = hostCmd.Parameters.Add("@mac", SqliteType.Text);
@@ -178,6 +211,9 @@ VALUES(@scan, @ip, @alive, @mac, @vendor, @name, @ports, @service, @rtt, @ttl, @
                     var pRtt = hostCmd.Parameters.Add("@rtt", SqliteType.Text);
                     var pTtl = hostCmd.Parameters.Add("@ttl", SqliteType.Integer);
                     var pProhibited = hostCmd.Parameters.Add("@prohibited", SqliteType.Integer);
+                    var pSysDescr = hostCmd.Parameters.Add("@sysdescr", SqliteType.Text);
+                    var pRisk = hostCmd.Parameters.Add("@risk", SqliteType.Integer);
+                    var pFindings = hostCmd.Parameters.Add("@findings", SqliteType.Text);
                     hostCmd.Parameters.AddWithValue("@scan", scanId);
 
                     invCmd.Transaction = tx;
@@ -185,9 +221,10 @@ VALUES(@scan, @ip, @alive, @mac, @vendor, @name, @ports, @service, @rtt, @ttl, @
                     // MAC/제조사/이름은 이번 스캔에서 비어 있으면(응답 없음 등) 마지막으로 알던 값을 유지하고,
                     // 포트는 살아있을 때의 값만 반영한다.
                     invCmd.CommandText = @"
-INSERT INTO hosts(ip, first_seen, last_seen, last_alive_at, last_mac, last_vendor, last_name, last_ports, last_alive, seen_count)
-VALUES(@ip, @now, @now, CASE WHEN @alive = 1 THEN @now ELSE '' END, @mac, @vendor, @name, @ports, @alive, 1)
+INSERT INTO hosts(ip, first_seen, last_seen, last_alive_at, last_mac, last_vendor, last_name, last_ports, last_alive, seen_count, last_risk)
+VALUES(@ip, @now, @now, CASE WHEN @alive = 1 THEN @now ELSE '' END, @mac, @vendor, @name, @ports, @alive, 1, @risk)
 ON CONFLICT(ip) DO UPDATE SET
+    last_risk     = CASE WHEN excluded.last_alive = 1 THEN excluded.last_risk ELSE hosts.last_risk END,
     last_seen     = excluded.last_seen,
     last_alive_at = CASE WHEN excluded.last_alive = 1 THEN excluded.last_seen ELSE hosts.last_alive_at END,
     last_mac      = CASE WHEN excluded.last_mac    <> '' THEN excluded.last_mac    ELSE hosts.last_mac    END,
@@ -202,6 +239,7 @@ ON CONFLICT(ip) DO UPDATE SET
                     var iVendor = invCmd.Parameters.Add("@vendor", SqliteType.Text);
                     var iName = invCmd.Parameters.Add("@name", SqliteType.Text);
                     var iPorts = invCmd.Parameters.Add("@ports", SqliteType.Text);
+                    var iRisk = invCmd.Parameters.Add("@risk", SqliteType.Integer);
                     invCmd.Parameters.AddWithValue("@now", startedAt);
 
                     foreach (var h in record.Hosts)
@@ -218,6 +256,9 @@ ON CONFLICT(ip) DO UPDATE SET
                         pRtt.Value = h.Rtt ?? "";
                         pTtl.Value = h.Ttl;
                         pProhibited.Value = h.HasProhibited ? 1 : 0;
+                        pSysDescr.Value = h.SysDescr ?? "";
+                        pRisk.Value = h.RiskScore;
+                        pFindings.Value = h.FindingsJson ?? "";
                         hostCmd.ExecuteNonQuery();
 
                         iIp.Value = h.Ip;
@@ -226,6 +267,7 @@ ON CONFLICT(ip) DO UPDATE SET
                         iVendor.Value = h.Vendor ?? "";
                         iName.Value = h.Name ?? "";
                         iPorts.Value = h.Ports ?? "";
+                        iRisk.Value = h.RiskScore;
                         invCmd.ExecuteNonQuery();
                     }
                 }
@@ -294,7 +336,7 @@ FROM scans ORDER BY started_at DESC, id DESC LIMIT @limit;";
                 var list = new List<HostHistoryEntry>();
                 using var cmd = _conn.CreateCommand();
                 cmd.CommandText = @"
-SELECT h.scan_id, s.started_at, h.alive, h.mac, h.ports, h.service, h.has_prohibited
+SELECT h.scan_id, s.started_at, h.alive, h.mac, h.ports, h.service, h.has_prohibited, h.risk_score
 FROM scan_hosts h JOIN scans s ON s.id = h.scan_id
 WHERE h.ip = @ip
 ORDER BY s.started_at DESC, s.id DESC LIMIT @limit;";
@@ -305,7 +347,7 @@ ORDER BY s.started_at DESC, s.id DESC LIMIT @limit;";
                 {
                     list.Add(new HostHistoryEntry(
                         r.GetInt64(0), Parse(r.GetString(1)), r.GetInt64(2) != 0,
-                        r.GetString(3), r.GetString(4), r.GetString(5), r.GetInt64(6) != 0));
+                        r.GetString(3), r.GetString(4), r.GetString(5), r.GetInt64(6) != 0, r.GetInt32(7)));
                 }
                 return list;
             }
@@ -321,7 +363,8 @@ ORDER BY s.started_at DESC, s.id DESC LIMIT @limit;";
                 using (var cmd = _conn.CreateCommand())
                 {
                     cmd.CommandText = @"
-SELECT ip, first_seen, last_seen, last_alive_at, last_mac, last_vendor, last_name, last_ports, last_alive, seen_count
+SELECT ip, first_seen, last_seen, last_alive_at, last_mac, last_vendor, last_name, last_ports, last_alive, seen_count,
+       approved, approved_mac, owner, tags, note, last_risk
 FROM hosts;";
                     using var r = cmd.ExecuteReader();
                     while (r.Read())
@@ -331,7 +374,8 @@ FROM hosts;";
                             r.GetString(0), Parse(r.GetString(1)), Parse(r.GetString(2)),
                             lastAliveAt.Length == 0 ? null : Parse(lastAliveAt),
                             r.GetString(4), r.GetString(5), r.GetString(6), r.GetString(7),
-                            r.GetInt64(8) != 0, r.GetInt32(9)));
+                            r.GetInt64(8) != 0, r.GetInt32(9),
+                            r.GetInt64(10) != 0, r.GetString(11), r.GetString(12), r.GetString(13), r.GetString(14), r.GetInt32(15)));
                     }
                 }
 
@@ -370,6 +414,245 @@ FROM hosts;";
                         states[r.GetString(0)] = new HostState(r.GetInt64(1) != 0, r.GetString(2), r.GetString(3), r.GetInt64(4) != 0);
                 }
                 return states;
+            }
+        }
+
+        // ---- 자산 승인 / 메타 ----
+
+        // 승인된 자산 목록(IP → 승인 MAC/소유자). 미승인 장비 판정의 기준.
+        public IReadOnlyDictionary<string, ApprovedHost> GetApprovedHosts()
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                var map = new Dictionary<string, ApprovedHost>();
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = "SELECT ip, approved_mac, owner FROM hosts WHERE approved = 1;";
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) map[r.GetString(0)] = new ApprovedHost(r.GetString(0), r.GetString(1), r.GetString(2));
+                return map;
+            }
+        }
+
+        // 승인/승인 해제. 승인 시 현재 알려진 MAC을 승인 MAC으로 고정한다(인벤토리에 없는 IP는 행을 만든다).
+        public int SetApproved(IEnumerable<string> ips, bool approved, DateTimeOffset now)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                int n = 0;
+                using var tx = _conn.BeginTransaction();
+                using var cmd = _conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = approved
+                    ? @"INSERT INTO hosts(ip, first_seen, last_seen, approved, approved_at, approved_mac)
+                        VALUES(@ip, @now, @now, 1, @now, '')
+                        ON CONFLICT(ip) DO UPDATE SET approved = 1, approved_at = @now, approved_mac = hosts.last_mac;"
+                    : "UPDATE hosts SET approved = 0, approved_at = '', approved_mac = '' WHERE ip = @ip;";
+                var pIp = cmd.Parameters.Add("@ip", SqliteType.Text);
+                cmd.Parameters.AddWithValue("@now", Fmt(now));
+                foreach (string ip in ips)
+                {
+                    if (string.IsNullOrWhiteSpace(ip)) continue;
+                    pIp.Value = ip.Trim();
+                    n += cmd.ExecuteNonQuery();
+                }
+                tx.Commit();
+                return n;
+            }
+        }
+
+        // 소유자/태그/메모. null인 항목은 바꾸지 않는다.
+        public bool SetHostMeta(string ip, string? owner, string? tags, string? note)
+        {
+            if (string.IsNullOrWhiteSpace(ip)) return false;
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = @"
+INSERT INTO hosts(ip, first_seen, last_seen, owner, tags, note)
+VALUES(@ip, @now, @now, COALESCE(@owner, ''), COALESCE(@tags, ''), COALESCE(@note, ''))
+ON CONFLICT(ip) DO UPDATE SET
+    owner = COALESCE(@owner, hosts.owner),
+    tags  = COALESCE(@tags,  hosts.tags),
+    note  = COALESCE(@note,  hosts.note);";
+                cmd.Parameters.AddWithValue("@ip", ip.Trim());
+                cmd.Parameters.AddWithValue("@now", Fmt(DateTimeOffset.UtcNow));
+                cmd.Parameters.AddWithValue("@owner", (object?)owner ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@tags", (object?)tags ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@note", (object?)note ?? DBNull.Value);
+                return cmd.ExecuteNonQuery() > 0;
+            }
+        }
+
+        // 인벤토리에서 한 호스트를 지운다(스캔 이력은 남는다).
+        public bool DeleteHost(string ip)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM hosts WHERE ip = @ip;";
+                cmd.Parameters.AddWithValue("@ip", ip);
+                return cmd.ExecuteNonQuery() > 0;
+            }
+        }
+
+        // ---- 알림 ----
+
+        // 같은 key의 알림이 있으면 횟수/마지막 시각을 올리고(해결됨이었으면 다시 open), 없으면 새로 만든다. 반환값은 현재 행.
+        public AlertRecord UpsertAlert(string key, ScanChangeType type, string ip, string detail, DateTimeOffset now)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                using (var cmd = _conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
+INSERT INTO alerts(key, type, ip, detail, first_seen, last_seen, count, state)
+VALUES(@key, @type, @ip, @detail, @now, @now, 1, 0)
+ON CONFLICT(key) DO UPDATE SET
+    last_seen = @now,
+    detail    = excluded.detail,
+    count     = alerts.count + 1,
+    state     = CASE WHEN alerts.state = 3 THEN 0
+                     WHEN alerts.state = 2 AND alerts.snooze_until <> '' AND alerts.snooze_until < @now THEN 0
+                     ELSE alerts.state END;";
+                    cmd.Parameters.AddWithValue("@key", key);
+                    cmd.Parameters.AddWithValue("@type", (int)type);
+                    cmd.Parameters.AddWithValue("@ip", ip);
+                    cmd.Parameters.AddWithValue("@detail", detail ?? "");
+                    cmd.Parameters.AddWithValue("@now", Fmt(now));
+                    cmd.ExecuteNonQuery();
+                }
+                return GetAlertByKey(key)!;
+            }
+        }
+
+        public AlertRecord? GetAlertByKey(string key)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = AlertSelect + " WHERE key = @key;";
+                cmd.Parameters.AddWithValue("@key", key);
+                using var r = cmd.ExecuteReader();
+                return r.Read() ? ReadAlert(r) : null;
+            }
+        }
+
+        public IReadOnlyList<AlertRecord> ListAlerts(bool includeResolved = false, int limit = 500)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                var list = new List<AlertRecord>();
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = AlertSelect + (includeResolved ? "" : " WHERE state <> 3") + " ORDER BY last_seen DESC, id DESC LIMIT @limit;";
+                cmd.Parameters.AddWithValue("@limit", limit);
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) list.Add(ReadAlert(r));
+                return list;
+            }
+        }
+
+        public bool SetAlertState(long id, AlertState state, DateTimeOffset? snoozeUntil = null, string? note = null)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = "UPDATE alerts SET state = @state, snooze_until = @until, note = COALESCE(@note, note) WHERE id = @id;";
+                cmd.Parameters.AddWithValue("@state", (int)state);
+                cmd.Parameters.AddWithValue("@until", snoozeUntil.HasValue ? Fmt(snoozeUntil.Value) : "");
+                cmd.Parameters.AddWithValue("@note", (object?)note ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@id", id);
+                return cmd.ExecuteNonQuery() > 0;
+            }
+        }
+
+        public void MarkAlertsNotified(IEnumerable<long> ids, DateTimeOffset now)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                using var tx = _conn.BeginTransaction();
+                using var cmd = _conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = "UPDATE alerts SET last_notified_at = @now WHERE id = @id;";
+                var pId = cmd.Parameters.Add("@id", SqliteType.Integer);
+                cmd.Parameters.AddWithValue("@now", Fmt(now));
+                foreach (long id in ids) { pId.Value = id; cmd.ExecuteNonQuery(); }
+                tx.Commit();
+            }
+        }
+
+        // 이번 스캔에서 더 이상 관찰되지 않는 열린 알림을 '해결됨'으로 닫는다(key 목록은 이번 스캔의 활성 key).
+        public int ResolveAlertsNotIn(IReadOnlyCollection<string> activeKeys, IEnumerable<ScanChangeType> resolvableTypes)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                var types = new List<int>();
+                foreach (var t in resolvableTypes) types.Add((int)t);
+                if (types.Count == 0) return 0;
+
+                var active = new HashSet<string>(activeKeys);
+                var toResolve = new List<long>();
+                using (var cmd = _conn.CreateCommand())
+                {
+                    cmd.CommandText = $"SELECT id, key FROM alerts WHERE state <> 3 AND type IN ({string.Join(",", types)});";
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read()) if (!active.Contains(r.GetString(1))) toResolve.Add(r.GetInt64(0));
+                }
+                if (toResolve.Count == 0) return 0;
+
+                using var tx = _conn.BeginTransaction();
+                using (var cmd = _conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "UPDATE alerts SET state = 3 WHERE id = @id;";
+                    var pId = cmd.Parameters.Add("@id", SqliteType.Integer);
+                    foreach (long id in toResolve) { pId.Value = id; cmd.ExecuteNonQuery(); }
+                }
+                tx.Commit();
+                return toResolve.Count;
+            }
+        }
+
+        private const string AlertSelect = "SELECT id, key, type, ip, detail, first_seen, last_seen, count, state, snooze_until, last_notified_at, note FROM alerts";
+
+        private static AlertRecord ReadAlert(SqliteDataReader r)
+        {
+            string snooze = r.GetString(9), notified = r.GetString(10);
+            return new AlertRecord(r.GetInt64(0), r.GetString(1), (ScanChangeType)r.GetInt32(2), r.GetString(3), r.GetString(4),
+                Parse(r.GetString(5)), Parse(r.GetString(6)), r.GetInt32(7), (AlertState)r.GetInt32(8),
+                snooze.Length == 0 ? null : Parse(snooze), notified.Length == 0 ? null : Parse(notified), r.GetString(11));
+        }
+
+        // ---- 유지보수 ----
+
+        // 온라인 백업(VACUUM INTO): 열려 있는 상태에서도 일관된 복사본을 만든다.
+        public void BackupTo(string path)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                if (File.Exists(path)) File.Delete(path);
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = "VACUUM INTO @path;";
+                cmd.Parameters.AddWithValue("@path", path);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public long FileSizeBytes
+        {
+            get
+            {
+                try { return new FileInfo(_conn.DataSource).Length; } catch { return 0; }
             }
         }
 

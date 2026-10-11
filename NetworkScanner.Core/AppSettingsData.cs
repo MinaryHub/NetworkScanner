@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text.Json.Serialization;
+using NetworkScanner.Alerts;
 using NetworkScanner.Network;
 using NetworkScanner.Upload;
 
@@ -59,6 +60,21 @@ namespace NetworkScanner
         // 알림(변화 감지/위험 포트). 비어 있으면 비활성.
         public NotificationSettings Notifications { get; set; } = new NotificationSettings();
 
+        // 알림 운영(재알림 간격, 점검 시간대)과 자산 승인 정책.
+        public AlertSettings Alerts { get; set; } = new AlertSettings();
+        public AssetPolicySettings AssetPolicy { get; set; } = new AssetPolicySettings();
+
+        // 식별 프로브(SNMP/mDNS/NetBIOS)와 취약점 평가.
+        public IdentitySettings Identity { get; set; } = new IdentitySettings();
+        public bool AssessVulnerabilities { get; set; } = true;
+
+        // 스캔 프로필("quick"/"standard"/"thorough").
+        public string ScanProfile { get; set; } = "standard";
+
+        // 이력 보존 일수(0 = 무제한)와 자동 백업 보관 개수.
+        public int HistoryRetentionDays { get; set; } = 180;
+        public int HistoryBackupsToKeep { get; set; } = 3;
+
         public bool IsInScheduleHour(int clockHour)
         {
             int label = clockHour == 0 ? 24 : clockHour;
@@ -82,6 +98,13 @@ namespace NetworkScanner
                 var ports = ProbeExtensions.ParsePorts(PortList);
                 if (ports.Count == 0) errors.Add(Localization.T("settings.invalid.portlist"));
             }
+
+            var (_, invalidWindows) = MaintenanceWindow.ParseList(Alerts.MaintenanceWindows);
+            if (invalidWindows.Count > 0)
+                errors.Add(string.Format(Localization.T("settings.invalid.maintenance"), string.Join("; ", invalidWindows)));
+            if (Alerts.RenotifyAfterHours < 0 || Alerts.RenotifyAfterHours > 720)
+                errors.Add(Localization.T("settings.invalid.renotify"));
+            if (HistoryRetentionDays < 0) errors.Add(Localization.T("settings.invalid.retention"));
 
             var (_, invalidAllow) = RiskPolicy.ParseAllowList(RiskAllowList);
             if (invalidAllow.Count > 0)
@@ -112,6 +135,24 @@ namespace NetworkScanner
             if (IPAddress.TryParse(host, out _)) return true;
             return Uri.CheckHostName(host) is UriHostNameType.Dns;
         }
+    }
+
+    public sealed class AssetPolicySettings
+    {
+        // 승인되지 않은 장비가 살아있으면 알림(UnapprovedHost).
+        public bool AlertOnUnapproved { get; set; }
+        // 첫 스캔(인벤토리가 비어 있을 때) 결과를 모두 승인 처리해 기준선으로 삼는다.
+        public bool AutoApproveFirstScan { get; set; } = true;
+        // 이 점수 이상이면 HighRisk 알림(0 = 끔).
+        public int HighRiskThreshold { get; set; } = 40;
+    }
+
+    public sealed class IdentitySettings
+    {
+        public bool Snmp { get; set; } = true;
+        public string SnmpCommunity { get; set; } = "public";
+        public bool Mdns { get; set; } = true;
+        public bool NetBios { get; set; } = true;
     }
 
     public sealed class NotificationSettings

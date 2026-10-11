@@ -84,7 +84,12 @@ netscan history [scans|inventory|host <ip>|prune <days>]  query the local histor
 --upload / --notify           Upload results / send notifications with the saved settings
 --scheduled                   Save CSV + HTML report like a scheduled scan (for cron)
 -o table|json|csv|html        Output format; --out <file> writes it to a file
+--profile quick|standard|thorough, --allow <risky-port exceptions>
 --parallelism <1-512>, --system-name <name>, --lang en|ko, --no-history, -q
+
+netscan assets [list|approve <ip…>|unapprove <ip…>|set <ip> --owner X --tags a,b] [--all]
+netscan alerts [list|ack <id>|snooze <id> [hours]|reopen <id>]
+netscan settings export|import <file>      netscan diag [zip]
 ```
 
 Progress goes to stderr, results to stdout (safe to pipe). Exit code 3 means the scan succeeded but risky ports were found.
@@ -95,6 +100,16 @@ netscan --use-settings --scheduled --upload --notify -q      # cron / task-sched
 netscan history inventory
 docker run --rm --net=host --cap-add=NET_RAW ghcr.io/<owner>/netscan --range 10.0.0.0/24
 ```
+
+## Assets, alerts and assessment
+
+- **Asset approval**: every host ever seen is in the inventory (History screen / `netscan assets list`). Approve the ones you know (`netscan assets approve 10.0.0.5` or `--all` for everything currently alive); the MAC seen at approval time is pinned. With *Alert on unapproved devices* enabled, any live host outside the approved list raises `UnapprovedHost`, and an approved IP answering with a different MAC raises `ApprovedMacMismatch`. The first scan can auto-approve everything it finds to form the baseline. Owner, tags and notes are kept per host.
+- **Alert operations**: the same event is one alert no matter how many scans repeat it; acknowledge or snooze it (`netscan alerts ack <id>` / `snooze <id> [hours]`), define maintenance windows (`Mon-Fri 22:00-06:00; Sat,Sun`) during which nothing is sent, choose how often an open alert is re-sent, and alerts resolve themselves when the condition disappears.
+- **Identification**: besides reverse DNS, live hosts are asked over SNMP v2c (sysDescr/sysName/sysObjectID, community configurable), mDNS and NetBIOS; the best name wins and OS/device hints replace the TTL guess.
+- **Assessment**: open ports and banners are matched against the offline rule set `data/vulnrules.json` (vulnerable versions such as old OpenSSH/nginx/Apache, exposed databases/remote-admin ports, SSH-1, plain Telnet/FTP) and TLS endpoints are inspected (expired/expiring/self-signed certificates, TLS 1.0/1.1, weak RSA keys). Each host gets a 0–100 risk score; `HighRisk` alerts fire above the configured threshold. Update the rule file with your own entries — the embedded copy is used when the file is missing.
+- **Scan profiles**: *quick* (ping sweep only, 128 parallel), *standard* (your settings), *thorough* (top ~80 service ports added, identification + assessment on, slower timeouts). `--profile` on the CLI.
+- **Reports**: HTML, JSON and **PDF** (Korean-capable) from the GUI, `-o pdf --out file.pdf` on the CLI; scheduled scans save CSV + HTML + PDF.
+- **Operations**: settings export/import (no secrets inside), diagnostic bundle (`netscan diag` or Settings) for support, history retention (days) with daily rotating backups and restore.
 
 ## Headless scheduler (`netscan-service`)
 
@@ -113,7 +128,8 @@ User data lives in a per-user folder that survives updates: `%APPDATA%\NetworkSc
 |---|---|
 | `settings.json` | All settings and scan ranges (schema v2). Old `setting.ini` / `iprange.ini` are migrated once and renamed `*.migrated`. |
 | `secrets/` | Encrypted-file secret store (used when no OS credential store is available). Passwords/tokens are never written to `settings.json`. |
-| `history.db` | SQLite scan history and inventory |
+| `history.db` | SQLite scan history, inventory (approvals/owners/tags) and alerts |
+| `backups/` | Daily `history-*.db` backups (rotated) |
 | `env/` | Saved CSV results and HTML reports |
 | `outbox/` | Uploads waiting to be retried |
 | `logs/` | Daily log files (14 days kept) |

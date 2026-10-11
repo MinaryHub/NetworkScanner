@@ -207,6 +207,36 @@ namespace NetworkScanner
             }
         }
 
+        // ---------------------------------------------------------------- 내보내기 / 가져오기
+
+        // 설정+대역을 JSON 파일로 내보낸다. 비밀(비밀번호/토큰)은 포함되지 않는다.
+        public static void Export(string path)
+        {
+            SettingsDocument doc;
+            lock (Lock) doc = ReadDocument() ?? new SettingsDocument();
+            File.WriteAllText(path, JsonSerializer.Serialize(doc, JsonOptions), new UTF8Encoding(false));
+        }
+
+        // 내보낸 JSON을 읽어 현재 설정을 덮어쓴다(컬럼 너비·고지 확인은 현재 값 유지). 비밀은 건드리지 않는다.
+        public static SettingsDocument Import(string path)
+        {
+            var incoming = JsonSerializer.Deserialize<SettingsDocument>(File.ReadAllText(path, Encoding.UTF8), JsonOptions)
+                           ?? throw new InvalidDataException("not a settings file");
+            incoming.Settings ??= new AppSettingsData();
+            incoming.ScanRanges ??= new List<ScanRangeInfo>();
+            lock (Lock)
+            {
+                SettingsDocument current = ReadDocument() ?? new SettingsDocument();
+                incoming.Settings.IpListColumnWidths = current.Settings.IpListColumnWidths;
+                incoming.Settings.IpRangeColumnWidths = current.Settings.IpRangeColumnWidths;
+                incoming.Settings.UsageNoticeAccepted = current.Settings.UsageNoticeAccepted;
+                incoming.Settings.HourEnabled = NormalizeHours(incoming.Settings.HourEnabled);
+                WriteDocument(incoming);
+                LoadSecrets(incoming.Settings);
+            }
+            return incoming;
+        }
+
         // ---------------------------------------------------------------- 레거시 ini 변환
 
         private static SettingsDocument? MigrateLegacy()

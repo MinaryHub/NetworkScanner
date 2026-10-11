@@ -56,6 +56,10 @@
                 </StackPanel>
 
                 <StackPanel Grid.Row="2" Spacing="10">
+                    <!-- 열린 알림 수(0이면 숨김). 스캔이 끝나거나 이력 화면에서 상태를 바꾸면 갱신된다. -->
+                    <Border Background="{StaticResource NavyRaisedBrush}" CornerRadius="8" Padding="12,8" IsVisible="{Binding #TbAlerts.IsVisible}">
+                        <TextBlock Name="TbAlerts" Foreground="#FFF28B82" FontSize="12" TextWrapping="Wrap" IsVisible="False" />
+                    </Border>
                     <!-- 전송에 실패해 outbox에 밀린 업로드 건수(0이면 숨김). -->
                     <Border Background="{StaticResource NavyRaisedBrush}" CornerRadius="8" Padding="12,8" IsVisible="{Binding #TbOutbox.IsVisible}">
                         <TextBlock Name="TbOutbox" Foreground="#FFF5B23B" FontSize="12" TextWrapping="Wrap" IsVisible="False" />

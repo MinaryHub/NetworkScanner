@@ -3,9 +3,9 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:l="clr-namespace:NetworkScanner.Avalonia.Helpers"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="800"
              x:Class="NetworkScanner.Avalonia.Views.HistoryView">
-    <Grid RowDefinitions="Auto,Auto,*,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,*,Auto,*,Auto">
         <Border Grid.Row="0" Classes="bar">
         <Grid ColumnDefinitions="*,Auto">
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
@@ -19,7 +19,8 @@
                         <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=history.refresh}" />
                     </StackPanel>
                 </Button>
-                <Button Name="BtnPrune" Click="BtnPrune_Click" Content="{l:Tr Key=history.prune}" />
+                <Button Name="BtnBackup" Click="BtnBackup_Click" Content="{l:Tr Key=history.backup}" />
+                <Button Name="BtnPrune" Classes="danger" Click="BtnPrune_Click" Content="{l:Tr Key=history.prune}" />
             </StackPanel>
         </Grid>
         </Border>
@@ -38,11 +39,24 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock Grid.Row="3" Classes="section" Margin="22,16,0,6" Text="{l:Tr Key=history.inventory}" />
+        <!-- 인벤토리: 선택한 호스트에 대해 승인/승인 해제/소유자·태그 지정. 여러 행 선택 가능. -->
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="20,14,20,6">
+            <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Margin="2,0,0,0" Text="{l:Tr Key=history.inventory}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Name="BtnApprove" Classes="accentoutline" Click="BtnApprove_Click" IsEnabled="False" Content="{l:Tr Key=assets.approve}" />
+                <Button Name="BtnUnapprove" Click="BtnUnapprove_Click" IsEnabled="False" Content="{l:Tr Key=assets.unapprove}" />
+                <Button Name="BtnSetOwner" Click="BtnSetOwner_Click" IsEnabled="False" Content="{l:Tr Key=assets.setowner}" />
+            </StackPanel>
+        </Grid>
         <DataGrid Grid.Row="4" Name="DgInventory" Margin="20,0" AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserSortColumns="True" CanUserResizeColumns="True">
+                  CanUserSortColumns="True" CanUserResizeColumns="True" SelectionMode="Extended" SelectionChanged="DgInventory_SelectionChanged">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="{l:Tr Key=history.col.ip}" Binding="{Binding Ip}" Width="130" />
+                <DataGridTextColumn Header="{l:Tr Key=assets.approved}" Binding="{Binding Approved}" Width="70" />
+                <DataGridTextColumn Header="{l:Tr Key=assets.approvedmac}" Binding="{Binding ApprovedMac}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=assets.owner}" Binding="{Binding Owner}" Width="120" />
+                <DataGridTextColumn Header="{l:Tr Key=assets.tags}" Binding="{Binding Tags}" Width="130" />
+                <DataGridTextColumn Header="{l:Tr Key=assets.risk}" Binding="{Binding Risk}" Width="70" />
                 <DataGridTextColumn Header="{l:Tr Key=history.col.firstseen}" Binding="{Binding FirstSeen}" Width="150" />
                 <DataGridTextColumn Header="{l:Tr Key=history.col.lastseen}" Binding="{Binding LastSeen}" Width="150" />
                 <DataGridTextColumn Header="{l:Tr Key=history.col.lastalive}" Binding="{Binding LastAlive}" Width="150" />
@@ -54,6 +68,31 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock Grid.Row="5" Name="TbMsg" Classes="caption" Margin="20,8,20,12" />
+        <!-- 알림: 열린 것만 기본 표시. 확인/스누즈는 외부 채널 재알림을 막고, 다시 열기는 되돌린다. -->
+        <Grid Grid.Row="5" ColumnDefinitions="*,Auto" Margin="20,14,20,6">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16">
+                <TextBlock Classes="section" VerticalAlignment="Center" Margin="2,0,0,0" Text="{l:Tr Key=alerts.open}" />
+                <CheckBox Name="ChkShowResolved" Content="{l:Tr Key=alerts.showresolved}" IsCheckedChanged="ChkShowResolved_Changed" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Name="BtnAck" Classes="accentoutline" Click="BtnAck_Click" IsEnabled="False" Content="{l:Tr Key=alerts.ack}" />
+                <Button Name="BtnSnooze" Click="BtnSnooze_Click" IsEnabled="False" Content="{l:Tr Key=alerts.snooze}" />
+                <Button Name="BtnReopen" Click="BtnReopen_Click" IsEnabled="False" Content="{l:Tr Key=alerts.reopen}" />
+            </StackPanel>
+        </Grid>
+        <DataGrid Grid.Row="6" Name="DgAlerts" Margin="20,0" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserSortColumns="True" CanUserResizeColumns="True" SelectionMode="Extended" SelectionChanged="DgAlerts_SelectionChanged">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="{l:Tr Key=alerts.col.state}" Binding="{Binding State}" Width="100" />
+                <DataGridTextColumn Header="{l:Tr Key=alerts.col.type}" Binding="{Binding Type}" Width="200" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.ip}" Binding="{Binding Ip}" Width="130" />
+                <DataGridTextColumn Header="{l:Tr Key=alerts.col.detail}" Binding="{Binding Detail}" Width="260" />
+                <DataGridTextColumn Header="{l:Tr Key=alerts.col.first}" Binding="{Binding First}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=alerts.col.last}" Binding="{Binding Last}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=alerts.col.count}" Binding="{Binding Count}" Width="70" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Grid.Row="7" Name="TbMsg" Classes="caption" Margin="20,8,20,12" TextTrimming="CharacterEllipsis" />
     </Grid>
 </UserControl>

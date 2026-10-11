@@ -11,6 +11,8 @@
         <helpers:StatusKeyIsConverter x:Key="StatusKeyIs" />
         <helpers:StatusRowBackgroundConverter x:Key="StatusRowBackground" />
         <helpers:StatusForegroundConverter x:Key="StatusForeground" />
+        <helpers:RiskScoreConverter x:Key="RiskScore" />
+        <helpers:BoolCheckConverter x:Key="BoolCheck" />
     </UserControl.Resources>
 
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
@@ -38,10 +40,13 @@
                         </StackPanel>
                     </Button>
                     <Button Name="BtnReport" Click="BtnReport_Click">
-                        <TextBlock VerticalAlignment="Center" Text="{helpers:Tr Key=btn.report}" />
+                        <TextBlock VerticalAlignment="Center" Text="{helpers:Tr Key=btn.report.all}" />
                     </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <!-- 스캔 프로필(빠름/표준/정밀): 바꾸면 설정에 저장되고 다음 스캔부터 적용된다. -->
+                    <ComboBox Name="CmbProfile" Width="130" VerticalAlignment="Center" SelectionChanged="CmbProfile_SelectionChanged"
+                              ToolTip.Tip="{helpers:Tr Key=settings.profile}" />
                     <Button Name="BtnRefresh" Classes="primary" Click="BtnRefresh_Click">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Image Source="avares://NetworkScanner.Avalonia/Assets/refresh.png" Width="16" Height="16" />
@@ -115,7 +120,8 @@
             <TextBlock Grid.Column="1" Name="TbMsg" Classes="caption" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </Grid>
 
-        <DataGrid Grid.Row="4" Name="DgIPList" Margin="20,0,20,12" AutoGenerateColumns="False" CanUserSortColumns="True" CanUserResizeColumns="True">
+        <DataGrid Grid.Row="4" Name="DgIPList" Margin="20,0,20,12" AutoGenerateColumns="False" CanUserSortColumns="True" CanUserResizeColumns="True"
+                  DoubleTapped="DgIPList_DoubleTapped">
             <DataGrid.Styles>
                 <Style Selector="DataGridRow">
                     <Setter Property="Background" Value="{Binding StatusKey, Converter={StaticResource StatusRowBackground}}" />
@@ -128,6 +134,9 @@
                     <MenuItem Header="{helpers:Tr Key=menu.checkport}" Click="MenuItemCheckPort_Click" />
                     <MenuItem Header="{helpers:Tr Key=menu.checkreserved}" Click="MenuItemCheckReservedPort_Click" />
                     <MenuItem Header="{helpers:Tr Key=menu.checkprohibit}" Click="MenuItemCheckProhibitPort_Click" />
+                    <Separator />
+                    <MenuItem Header="{helpers:Tr Key=menu.details}" Click="MenuItemDetails_Click" />
+                    <MenuItem Name="MenuItemApprove" Header="{helpers:Tr Key=menu.approve}" Click="MenuItemApprove_Click" />
                     <Separator />
                     <MenuItem Header="{helpers:Tr Key=menu.wol}" Click="MenuItemWakeOnLan_Click" />
                     <Separator />
@@ -163,6 +172,23 @@
                 <DataGridTextColumn Header="{helpers:Tr Key=col.rtt}" Binding="{Binding RountTime}" IsReadOnly="True" Width="90" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.note}" Binding="{Binding Description}" Width="240" FontFamily="{StaticResource UiFont}" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.created}" Binding="{Binding CommitDate}" IsReadOnly="True" Width="160" />
+                <!-- 위험 점수(0은 빈칸)와 자산 승인 표시. 저장된 컬럼 너비(인덱스 기준)와 호환되도록 맨 뒤에 둔다. -->
+                <DataGridTemplateColumn Header="{helpers:Tr Key=col.risk}" Width="70" SortMemberPath="RiskScore">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding RiskScore, Converter={StaticResource RiskScore}}" Classes="mono" TextAlignment="Right"
+                                       VerticalAlignment="Center" Margin="8,0" Foreground="{Binding StatusKey, Converter={StaticResource StatusForeground}}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="{helpers:Tr Key=col.approved}" Width="70" SortMemberPath="Approved">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Approved, Converter={StaticResource BoolCheck}}" TextAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{StaticResource UpBrush}" FontWeight="Bold" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
 

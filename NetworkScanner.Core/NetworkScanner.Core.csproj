@@ -14,6 +14,13 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
     <!-- ScanHistoryStore의 SQLite 스캔 이력 저장(history.db)에 필요 -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <!-- Reports/PdfReport의 PDF 리포트 생성(MIT). 시스템 폰트에 의존하지 않도록 아래 나눔고딕을 임베드해 사용한다. -->
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PDF 리포트용 한글 폰트(나눔고딕, SIL OFL). Reports/NanumFontResolver가 매니페스트 리소스에서 읽는다. -->
+    <EmbeddedResource Include="..\assets\fonts\NanumGothic*.ttf" LogicalName="NetworkScanner.Fonts.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

@@ -172,6 +172,70 @@
                 </WrapPanel>
             </Border>
 
+            <!-- 자산 정책: 미승인 장비 알림, 첫 스캔 자동 승인, 고위험 기준 점수. -->
+            <Border Classes="card">
+                <WrapPanel>
+                    <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.assets}" />
+                    <CheckBox Name="ChkAlertUnapproved" Content="{l:Tr Key=settings.alertunapproved}" Margin="0,0,16,0" />
+                    <CheckBox Name="ChkAutoApprove" Content="{l:Tr Key=settings.autoapprove}" Margin="0,0,16,0" />
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.highrisk}" />
+                    <TextBox Name="TbHighRisk" Width="70" Classes="mono" />
+                </WrapPanel>
+            </Border>
+
+            <!-- 알림 운영: 재알림 간격과 점검 시간대(그 시간엔 기록만 하고 보내지 않음). -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <WrapPanel>
+                        <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.alertops}" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.renotify}" />
+                        <TextBox Name="TbRenotify" Width="70" Classes="mono" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="110" VerticalAlignment="Top" Margin="0,8,0,0" Text="{l:Tr Key=settings.maintenance}" />
+                        <TextBox Name="TbMaintenance" Width="520" Height="64" AcceptsReturn="True" TextWrapping="Wrap" Classes="mono"
+                                 Watermark="{l:Tr Key=settings.maintenance.hint}" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 장비 식별 프로브와 취약점 평가. -->
+            <Border Classes="card">
+                <WrapPanel>
+                    <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.identity}" />
+                    <CheckBox Name="ChkSnmp" Content="{l:Tr Key=settings.snmp}" Margin="0,0,6,0" />
+                    <TextBox Name="TbSnmpCommunity" Width="120" Watermark="public" Classes="mono" Margin="0,0,16,0" />
+                    <CheckBox Name="ChkMdns" Content="{l:Tr Key=settings.mdns}" Margin="0,0,16,0" />
+                    <CheckBox Name="ChkNetBios" Content="{l:Tr Key=settings.netbios}" Margin="0,0,16,0" />
+                    <CheckBox Name="ChkVuln" Content="{l:Tr Key=settings.vuln}" />
+                </WrapPanel>
+            </Border>
+
+            <!-- 이력 보존/백업과 수동 백업·복원. 복원은 다음 시작 시 적용된다(엔진이 DB를 열기 전). -->
+            <Border Classes="card">
+                <WrapPanel>
+                    <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.history}" />
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.retention}" />
+                    <TextBox Name="TbRetention" Width="70" Classes="mono" Margin="0,0,16,0" />
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.backups}" />
+                    <TextBox Name="TbBackups" Width="60" Classes="mono" Margin="0,0,16,0" />
+                    <Button Name="BtnBackupNow" Click="BtnBackupNow_Click" Content="{l:Tr Key=history.backup}" Margin="0,0,8,0" />
+                    <Button Name="BtnRestore" Click="BtnRestore_Click" Content="{l:Tr Key=history.restore}" />
+                </WrapPanel>
+            </Border>
+
+            <!-- 스캔 프로필, 설정 내보내기/가져오기, 진단 번들. -->
+            <Border Classes="card">
+                <WrapPanel>
+                    <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.maintenancebox}" />
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.profile}" />
+                    <ComboBox Name="CmbProfile" Width="150" Margin="0,0,16,0" />
+                    <Button Name="BtnExport" Click="BtnExport_Click" Content="{l:Tr Key=settings.export}" Margin="0,0,8,0" />
+                    <Button Name="BtnImport" Click="BtnImport_Click" Content="{l:Tr Key=settings.import}" Margin="0,0,8,0" />
+                    <Button Name="BtnDiag" Classes="accentoutline" Click="BtnDiag_Click" Content="{l:Tr Key=settings.diag}" />
+                </WrapPanel>
+            </Border>
+
             <Border Classes="card">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Classes="section" VerticalAlignment="Center" Text="{l:Tr Key=settings.language}" />

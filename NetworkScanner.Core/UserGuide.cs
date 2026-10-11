@@ -77,6 +77,16 @@ namespace NetworkScanner
                 "'Prune' to delete old scans. In Settings you can also enable notifications so that detected " +
                 "changes are posted to a webhook (Slack/Teams), a syslog server or sent by e-mail. The " +
                 "headless scheduler service (netscan-service) runs the same schedule without the GUI."),
+            new("Assets, alerts & risk",
+                "The History screen lists every device ever seen. Approve the ones you know (the MAC seen at approval " +
+                "time is remembered) and give them an owner and tags; with 'Alert on unapproved devices' enabled, any " +
+                "other live host raises an alert, and an approved IP answering with a different MAC is flagged. Alerts are " +
+                "collected once per event: acknowledge or snooze them, define maintenance windows (e.g. Mon-Fri " +
+                "22:00-06:00) during which nothing is sent, and they resolve themselves when the condition disappears. " +
+                "Live hosts are also identified over SNMP, mDNS and NetBIOS, and their open ports and banners are matched " +
+                "against a built-in rule set of vulnerable versions, exposed services and TLS problems, giving each host a " +
+                "0-100 risk score (double-click a row for the details). Scan profiles - Quick, Standard, Thorough - trade " +
+                "speed for depth; reports can also be saved as PDF."),
             new("Updates",
                 "The app checks GitHub for a newer version at startup. When one is found, an Update button " +
                 "appears at the bottom of the sidebar; click it to download the update and restart into the " +
@@ -134,6 +144,13 @@ namespace NetworkScanner
                 "인벤토리(최초/최근 발견, 마지막 MAC, 마지막 열린 포트)를 볼 수 있고, '정리'로 오래된 스캔을 지울 수 " +
                 "있습니다. 설정에서 알림을 켜면 감지된 변화를 웹훅(Slack/Teams), syslog 서버, 이메일로 보냅니다. " +
                 "헤드리스 스케줄러 서비스(netscan-service)는 GUI 없이 같은 스케줄을 실행합니다."),
+            new("자산·알림·위험도",
+                "이력 화면에는 지금까지 발견된 모든 장비가 있습니다. 아는 장비를 승인하고(승인 당시 MAC이 기억됩니다) 소유자와 " +
+                "태그를 지정하세요. '미승인 장비 알림'을 켜면 그 밖의 살아있는 호스트가 알림으로 올라오고, 승인된 IP가 다른 MAC으로 " +
+                "응답하면 경고합니다. 알림은 같은 사건당 한 건으로 모이며 확인·스누즈할 수 있고, 점검 시간대(예: Mon-Fri 22:00-06:00)에는 " +
+                "보내지 않으며, 조건이 사라지면 스스로 해결됩니다. 살아있는 호스트는 SNMP·mDNS·NetBIOS로도 식별하고, 열린 포트와 " +
+                "배너를 내장 규칙(취약 버전, 노출 서비스, TLS 문제)과 비교해 0~100 위험 점수를 매깁니다(행을 더블클릭하면 상세). " +
+                "스캔 프로필(빠른/표준/정밀)로 속도와 깊이를 조절하고, 리포트는 PDF로도 저장할 수 있습니다."),
             new("업데이트",
                 "앱은 시작할 때 GitHub에서 새 버전을 확인합니다. 새 버전이 있으면 사이드바 하단에 업데이트 버튼이 " +
                 "나타나며, 누르면 다운로드 후 새 버전으로 재시작됩니다. 설정과 스캔 기록은 업데이트 후에도 유지됩니다."),
@@ -193,6 +210,14 @@ namespace NetworkScanner
                 "スキャンを削除できます。設定で通知を有効にすると、検出した変化を Webhook(Slack/Teams)、syslog " +
                 "サーバー、メールで送信します。ヘッドレスのスケジューラーサービス(netscan-service)は GUI なしで同じ" +
                 "スケジュールを実行します。"),
+            new("資産・アラート・リスク",
+                "履歴画面にはこれまで検出したすべての機器が並びます。既知の機器を承認し(承認時の MAC を記憶)、所有者とタグを" +
+                "付けてください。「未承認機器を通知」を有効にすると、それ以外の稼働中ホストがアラートになり、承認済み IP が別の " +
+                "MAC で応答すると警告します。アラートは同じ事象につき 1 件にまとまり、確認・スヌーズでき、メンテナンス時間帯" +
+                "(例: Mon-Fri 22:00-06:00)には送信されず、条件が消えると自動的に解決されます。稼働中ホストは SNMP・mDNS・" +
+                "NetBIOS でも識別し、開放ポートとバナーを内蔵ルール(脆弱なバージョン、公開サービス、TLS の問題)と照合して " +
+                "0〜100 のリスクスコアを付けます(行をダブルクリックで詳細)。スキャンプロファイル(高速/標準/詳細)で速度と深さを" +
+                "選べ、レポートは PDF でも保存できます。"),
             new("アップデート",
                 "アプリは起動時に GitHub で新しいバージョンを確認します。新しいバージョンが見つかると、サイドバー" +
                 "下部にアップデートボタンが表示されます。クリックするとダウンロード後、新しいバージョンで再起動" +
@@ -244,6 +269,12 @@ namespace NetworkScanner
                 "每次扫描都会记录到本地数据库。历史界面列出过去的扫描以及曾发现的所有设备清单(首次/最近发现、最近 MAC、" +
                 "最近开放端口),可用“清理”删除旧扫描。在设置中启用通知后,检测到的变化会推送到 Webhook(Slack/Teams)、" +
                 "syslog 服务器或通过邮件发送。无界面的计划服务(netscan-service)可在没有 GUI 的情况下执行相同的计划。"),
+            new("资产、告警与风险",
+                "历史界面列出曾发现的所有设备。请批准已知设备(记录批准时的 MAC)并设置负责人和标签;启用“未批准设备告警”后,其他" +
+                "在线主机会产生告警,已批准 IP 以不同 MAC 响应时也会被标记。同一事件只生成一条告警,可确认或暂停,维护时段" +
+                "(如 Mon-Fri 22:00-06:00)内不发送,条件消失后自动解决。在线主机还会通过 SNMP、mDNS、NetBIOS 识别,开放端口和" +
+                "横幅会与内置规则(易受攻击的版本、暴露的服务、TLS 问题)比对,得出 0-100 的风险分数(双击行查看详情)。扫描配置" +
+                "(快速/标准/深度)在速度与深度之间取舍,报告也可保存为 PDF。"),
             new("更新",
                 "应用启动时会在 GitHub 上检查新版本。发现新版本时,侧边栏底部会出现更新按钮;点击即可下载并重启到" +
                 "新版本。设置和扫描记录在更新后会保留。"),

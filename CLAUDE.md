@@ -47,12 +47,18 @@ Tests set `UserDataPaths.OverrideRoot` and `AppSettingsStore.SecretStore` to tem
   - `Platform/` — native ARP table readers: `/proc/net/arp` (Linux), `sysctl` routing socket (macOS, header 92 bytes — verified), `GetIpNetTable2` (Windows). No `arp` binary needed (macOS falls back to `arp -an` only if sysctl fails).
   - `Upload/` — `IResultUploader` implementations `FtpUploader` (FTP/FTPS explicit/implicit, cert fingerprint pin), `SftpUploader` (SSH.NET, host-key pin or TOFU `known_hosts`), `HttpsUploader` (multipart + Bearer). `UploadOutbox` queues failures with backoff; `UploadService` = try now, else enqueue, then flush.
   - `History/` — `ScanHistoryStore` (SQLite `history.db`, WAL): scans, per-scan hosts, inventory (first/last seen). Also the change-detection baseline after a restart.
-  - `Notifications/` — `Notifier` with webhook / syslog(UDP RFC 5424) / SMTP channels.
+  - `Notifications/` — `Notifier` with webhook / syslog(UDP RFC 5424) / SMTP channels. It is fed by `AlertsProcessed`, not by raw changes.
+  - `Alerts/` — `AlertManager`: dedupes changes into `alerts` rows (SQLite), honours ack/snooze, maintenance windows (`MaintenanceWindow.ParseList`), re-notify interval, auto-resolves state-type alerts. `AlertOutcome.ChangesToNotify` is what hosts send.
+  - Asset approval lives in the `hosts` table (`approved`, `approved_mac`, `owner`, `tags`, `note`); `ScanDiff.ComputeChanges(baseline, current, approved, AssetPolicy)` emits `UnapprovedHost` / `ApprovedMacMismatch` / `HighRisk`.
+  - `Discovery/` — `IIdentityProbe`: SNMP v2c, mDNS (unicast PTR), NetBIOS NBSTAT, hand-written codecs; `CompositeIdentityProbe` + `HostIdentityMerge.ChooseName`. The engine builds the composite from `ScanOptions` (`SnmpEnabled`, `MdnsEnabled`, `NetBiosEnabled`, `SnmpCommunity`) unless `ScanServices.Identity` is set or `IdentityDisabled`.
+  - `Vulnerability/` — offline `RuleEngine` over `data/vulnrules.json` (embedded fallback `VulnRulesDefault`), `TlsInspector`; result = `IPInfo.RiskScore` (0-100) + `FindingsJson`. `StatusKey` is "warn" at RiskScore >= 40.
+  - `Reports/PdfReport` — PDFsharp + embedded Nanum Gothic (Korean). Scheduled scans also write a PDF.
+  - `ScanProfiles` (quick/standard/thorough) adjust `ScanOptions` only; `AppSettingsStore.Export/Import`; `Support/DiagnosticBundle`; `History/HistoryMaintenance` (retention prune + daily `VACUUM INTO` backups, `backups/`).
   - `CsvCodec` — RFC 4180 + formula-injection guard. CSV columns are header-mapped, so old 9-column files still load.
   - `AppLogger` — daily rolling files in `<userdata>/logs`, `Sink` event for hosts to mirror to console/UI. No Windows EventLog.
   - `Localization` — all user-visible Core strings go through `Localization.T(key)` (en/ko). Do not add hardcoded Korean/English strings to Core.
 - **`NetworkScanner.Avalonia`** — the only GUI. `MainWindow` implements `IScanConfigProvider` by delegating to `SettingsView`. Views: IP list, Settings (upload/notifications/limits with `AppSettingsData.Validate()`), Ref. ports, History, User guide. `UpdateService` = Velopack + GitHub Releases.
-- **`NetworkScanner.Cli`** — `netscan`: scan (`--use-settings`, `--upload`, `--notify`, `--scheduled`) and `history` subcommands. Progress → stderr, results → stdout, exit code 3 when risky ports were found.
+- **`NetworkScanner.Cli`** — `netscan`: scan (`--use-settings`, `--upload`, `--notify`, `--scheduled`, `--profile`, `-o pdf`) plus `history`, `assets`, `alerts`, `settings export|import` and `diag` subcommands. Progress → stderr, results → stdout, exit code 3 when risky ports were found.
 - **`NetworkScanner.Service`** — `netscan-service`: `Microsoft.Extensions.Hosting` worker (Windows Service / systemd / launchd / foreground) running the schedule from `settings.json` with last-run catch-up. Unit/plist/PowerShell installers live in `deploy/`.
 - **`NetworkScanner.Tests`** — xUnit, references Core only.
 - **`data/`** — `ouiinfo.ini` (raw IEEE `oui.txt`; refresh with `tools/update-oui.sh`), `reservedports.ini`, `prohibitports.ini`; linked into the GUI/CLI/service outputs. **`assets/`** — icon and toolbar images.
@@ -71,7 +77,7 @@ The engine reports through events; UI handlers marshal to the UI thread: `Messag
 
 - IPv4 math uses `uint32` (`IPRangeUtil`); never last-octet math.
 - Use `CultureInfo.InvariantCulture` for anything persisted; UTF-8 without BOM for files; case-insensitive file matching (`EnumerationOptions`).
-- `UserDataPaths` → `%APPDATA%\NetworkScanner` (Windows), `~/Library/Application Support/NetworkScanner` (macOS, .NET 10 mapping; old `~/.config/NetworkScanner` is migrated), `~/.config/NetworkScanner` (Linux) (settings.json, history.db, env/, outbox/, logs/, secrets/, known_hosts). Tests override `UserDataPaths.OverrideRoot`.
+- `UserDataPaths` → `%APPDATA%\NetworkScanner` (Windows), `~/Library/Application Support/NetworkScanner` (macOS, .NET 10 mapping; old `~/.config/NetworkScanner` is migrated), `~/.config/NetworkScanner` (Linux); contents: settings.json, history.db (schema v2), env/, outbox/, logs/, secrets/, backups/, known_hosts (settings.json, history.db, env/, outbox/, logs/, secrets/, known_hosts). Tests override `UserDataPaths.OverrideRoot`.
 - A UI-facing change usually needs a matching CLI option; put the logic in Core so it is tested once.
 
 ## Releases

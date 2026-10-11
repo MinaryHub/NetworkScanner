@@ -206,8 +206,8 @@ namespace NetworkScanner.Tests
             cmd.CommandText = "SELECT COUNT(*), MAX(version) FROM schema_version;";
             using var r = cmd.ExecuteReader();
             Assert.True(r.Read());
-            Assert.Equal(1, r.GetInt64(0));
-            Assert.Equal(1, r.GetInt64(1));
+            Assert.Equal(2, r.GetInt64(0)); // 버전마다 한 행(v1, v2)
+            Assert.Equal(2, r.GetInt64(1)); // 현재 스키마 버전
         }
 
         [Fact]

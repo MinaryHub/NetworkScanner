@@ -8,7 +8,10 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using NetworkScanner.Alerts;
+using NetworkScanner.Discovery;
 using NetworkScanner.History;
+using NetworkScanner.Vulnerability;
 using NetworkScanner.Network;
 using NetworkScanner.Upload;
 
@@ -28,9 +31,12 @@ namespace NetworkScanner
         private CancellationTokenSource? _scanCts;
         private Dictionary<string, AnnotationStore.Annotation> _annotations = new();
         private List<int> _userPorts = new();
+        private IIdentityProbe? _identity;
+        private bool _identityBuilt;
 
         public IScanConfigProvider Config { get; set; }
-        public ScanOptions Options { get; set; } = new();
+        private ScanOptions _options = new();
+        public ScanOptions Options { get => _options; set { _options = value; _identityBuilt = false; } }
         public Task? Scanning { get; private set; }
         public IPInfoList Items => _items;
         public ScanServices Services => _services;
@@ -47,6 +53,8 @@ namespace NetworkScanner
         public event Action? ScanFinished;
         // 대역 스캔이 끝난 뒤 직전 스캔과 비교한 변화 목록(비어 있으면 발생하지 않음).
         public event Action<IReadOnlyList<ScanChange>>? ScanChangesDetected;
+        // 변화가 알림 운영 규칙(중복/확인/스누즈/점검 시간대)을 거친 결과. 외부 채널 전송은 ToNotify/ChangesToNotify만 쓴다.
+        public event Action<AlertOutcome>? AlertsProcessed;
 
         public ScanEngine(IPInfoList items, OUIInfo oui, IScanConfigProvider config, ScanServices? services = null, ScanOptions? options = null)
         {
@@ -67,7 +75,7 @@ namespace NetworkScanner
         private static readonly string[] CsvHeader =
         {
             "IPAddress", "Port", "SystemName", "Description", "Commitdate", "Alive", "MacAddress", "Vendor", "RoundTime",
-            "Service", "Ttl", "HasProhibitedPort",
+            "Service", "Ttl", "HasProhibitedPort", "OsHint", "DeviceHint", "SysDescr", "IdentitySource", "RiskScore", "Findings", "Approved", "Owner",
         };
 
         public void LoadIPInfo(string filename)
@@ -122,7 +130,15 @@ namespace NetworkScanner
                         Vendor = Get(row, "Vendor"),
                         RountTime = Get(row, "RoundTime"),
                         Service = Get(row, "Service"),
+                        OsHint = Get(row, "OsHint"),
+                        DeviceHint = Get(row, "DeviceHint"),
+                        SysDescr = Get(row, "SysDescr"),
+                        IdentitySource = Get(row, "IdentitySource"),
+                        FindingsJson = Get(row, "Findings"),
+                        Owner = Get(row, "Owner"),
                     };
+                    if (int.TryParse(Get(row, "RiskScore"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int risk)) info.RiskScore = risk;
+                    if (bool.TryParse(Get(row, "Approved"), out bool approvedFlag)) info.Approved = approvedFlag;
                     if (bool.TryParse(Get(row, "Alive"), out bool alive)) info.Alive = alive;
                     if (int.TryParse(Get(row, "Ttl"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int ttl)) info.Ttl = ttl;
                     if (bool.TryParse(Get(row, "HasProhibitedPort"), out bool hp)) info.HasProhibitedPort = hp;
@@ -147,6 +163,8 @@ namespace NetworkScanner
                     i.Ip, i.Ports, i.SystemName, i.Description, i.CommitDate,
                     i.Alive.ToString(), i.Macaddr, i.Vendor, i.RountTime,
                     i.Service, i.Ttl.ToString(CultureInfo.InvariantCulture), i.HasProhibitedPort.ToString(),
+                    i.OsHint, i.DeviceHint, i.SysDescr, i.IdentitySource, i.RiskScore.ToString(CultureInfo.InvariantCulture), i.FindingsJson,
+                    i.Approved.ToString(), i.Owner,
                 })).Append("\r\n");
             }
             return sb.ToString();
@@ -421,6 +439,12 @@ namespace NetworkScanner
             bool usePortChecking = Config.GetUsePortChecking() == true;
             RiskPolicy policy = BuildRiskPolicy();
             List<int> userPorts = _userPorts.Count > 0 ? _userPorts : ProbeExtensions.ParsePorts(Config.GetPortList());
+            if (Options.ExtraPorts.Length > 0)
+            {
+                // 정밀 프로필: 사용자 포트에 대표 포트를 더한다(중복 제거, 오름차순).
+                userPorts = userPorts.Concat(Options.ExtraPorts).Distinct().OrderBy(p => p).ToList();
+                if (!usePortChecking) usePortChecking = true;
+            }
             var options = new ParallelOptions { MaxDegreeOfParallelism = Options.Parallelism, CancellationToken = token };
 
             // 사용자가 지정해 둔 이름/비고를 읽어와, 스캔 중 새로 발견되는 호스트에 자동 병합한다.
@@ -493,12 +517,17 @@ namespace NetworkScanner
             bool cancelled = token.IsCancellationRequested;
             DateTime finished = _services.Clock();
 
-            // ---- 변화 감지: 기준선과 이번 결과를 비교해 신규/오프라인/MAC 변경/새 포트/위험 포트를 알린다. ----
+            // ---- 변화 감지: 기준선과 이번 결과를 비교해 신규/오프라인/MAC 변경/새 포트/위험 포트/미승인 장비를 알린다. ----
             if (!cancelled)
             {
-                List<ScanChange> changes = ScanDiff.ComputeChanges(baseline, SnapshotStates());
-                if (changes.Count > 0) ScanChangesDetected?.Invoke(changes);
                 RecordHistory(started, finished, systemName, scheduling);
+                IReadOnlyDictionary<string, ApprovedHost>? approved = LoadApprovedHosts(baseline.Count == 0);
+                ApplyApprovals(approved);
+
+                List<ScanChange> changes = ScanDiff.ComputeChanges(baseline, SnapshotStates(), approved, Options.AssetPolicy);
+                if (changes.Count > 0) ScanChangesDetected?.Invoke(changes);
+                ProcessAlerts(changes, finished);
+                RunHistoryMaintenance(finished);
             }
 
             ProgressChanged?.Invoke(0);
@@ -510,6 +539,77 @@ namespace NetworkScanner
             {
                 await WriteIPInfo(true, systemName).ConfigureAwait(false);
                 await WriteAndUploadReport(systemName).ConfigureAwait(false); // 무인 스케줄 스캔은 HTML 리포트도 함께 남긴다.
+            }
+        }
+
+        // 승인 목록을 읽는다. 인벤토리가 비어 있던 최초 스캔이면(옵션) 지금 살아있는 호스트를 모두 승인해 기준선으로 삼는다.
+        private IReadOnlyDictionary<string, ApprovedHost>? LoadApprovedHosts(bool firstScan)
+        {
+            if (_services.History == null) return null;
+            try
+            {
+                var approved = _services.History.GetApprovedHosts();
+                if (approved.Count == 0 && firstScan && Options.AutoApproveFirstScan)
+                {
+                    List<string> alive;
+                    lock (_itemsLock) alive = _items.Where(i => i.Alive).Select(i => i.Ip).ToList();
+                    if (alive.Count > 0)
+                    {
+                        _services.History.SetApproved(alive, true, _services.Clock());
+                        approved = _services.History.GetApprovedHosts();
+                    }
+                }
+                return approved;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogWarn("NetworkScanner", "approved hosts unavailable: " + ex.Message);
+                return null;
+            }
+        }
+
+        private void ApplyApprovals(IReadOnlyDictionary<string, ApprovedHost>? approved)
+        {
+            if (approved == null) return;
+            lock (_itemsLock)
+            {
+                foreach (IPInfo i in _items)
+                {
+                    bool ok = approved.TryGetValue(i.Ip, out ApprovedHost? a);
+                    i.Approved = ok;
+                    i.Owner = ok ? a!.Owner : "";
+                }
+            }
+        }
+
+        private void ProcessAlerts(List<ScanChange> changes, DateTime now)
+        {
+            if (_services.History == null) return;
+            try
+            {
+                var manager = new AlertManager(_services.History, Options.Alerts);
+                AlertOutcome outcome = manager.Process(changes, now, Options.SecurityOnlyAlerts);
+                AlertsProcessed?.Invoke(outcome);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "alert processing failed: " + ex.Message);
+            }
+        }
+
+        // 하루 한 번: 보존 기간 지난 스캔 삭제 + 백업. 실패해도 스캔 결과에는 영향이 없다.
+        private void RunHistoryMaintenance(DateTime now)
+        {
+            if (_services.History == null) return;
+            try
+            {
+                var r = HistoryMaintenance.RunIfDue(_services.History, Options.HistoryRetentionDays, Options.HistoryBackupsToKeep, now);
+                if (r != null && (r.Pruned > 0 || r.BackupPath != null))
+                    AppLogger.LogInfo("History", string.Format(Localization.T("msg.history.maint"), r.Pruned, r.BackupPath ?? "-"));
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogWarn("History", "maintenance failed: " + ex.Message);
             }
         }
 
@@ -547,6 +647,16 @@ namespace NetworkScanner
 
                 Message?.Invoke(string.Format(Localization.T("msg.report.saved"), filename));
                 await UploadAsync(full).ConfigureAwait(false);
+
+                // 메일 첨부/보고용 PDF도 함께 남긴다(실패해도 HTML은 이미 저장됨).
+                try
+                {
+                    string pdfName = Path.ChangeExtension(filename, ".pdf");
+                    string pdfPath = Path.Combine(path, pdfName);
+                    await Reports.PdfReport.SaveAsync(pdfPath, snapshot, systemName, now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).ConfigureAwait(false);
+                    await UploadAsync(pdfPath).ConfigureAwait(false);
+                }
+                catch (Exception ex) { AppLogger.LogWarn("NetworkScanner", "pdf report failed: " + ex.Message); }
             }
             catch (Exception ex)
             {
@@ -562,7 +672,7 @@ namespace NetworkScanner
                 var map = new Dictionary<string, HostState>(_items.Count);
                 foreach (IPInfo i in _items)
                 {
-                    map[i.Ip] = new HostState(i.Alive, i.Macaddr ?? "", i.Ports ?? "", i.HasProhibitedPort);
+                    map[i.Ip] = new HostState(i.Alive, i.Macaddr ?? "", i.Ports ?? "", i.HasProhibitedPort, i.RiskScore);
                 }
                 return map;
             }
@@ -671,14 +781,37 @@ namespace NetworkScanner
             string vendor = string.IsNullOrEmpty(mac) ? "" : _oui.GetVender(mac);
 
             Task<string?> hostNameTask = _services.Dns.ReverseLookupAsync(targetIp, Options.DnsTimeoutMs, ct);
+            IIdentityProbe? probe = GetIdentityProbe();
+            Task<HostIdentity?> identityTask = probe != null && IPAddress.TryParse(targetIp, out IPAddress? addr)
+                ? probe.ProbeAsync(addr, Options.IdentityTimeoutMs, ct)
+                : Task.FromResult<HostIdentity?>(null);
             List<int> open = usePortChecking
                 ? await _services.Ports.OpenPortsAsync(targetIp, userPorts, Options.PortTimeoutMs, Options.PortParallelism, ct).ConfigureAwait(false)
                 : new List<int>();
             string? hostName = await hostNameTask.ConfigureAwait(false);
+            HostIdentity? identity = null;
+            try { identity = await identityTask.ConfigureAwait(false); } catch (OperationCanceledException) { throw; } catch { }
 
             string openPorts = ProbeExtensions.FormatPorts(open);
             bool hasProhibited = policy.HasRiskyPort(targetIp, open);
-            string service = usePortChecking ? await GrabServiceAsync(targetIp, open, ct).ConfigureAwait(false) : "";
+            string service = usePortChecking && Options.BannerGrab ? await GrabServiceAsync(targetIp, open, ct).ConfigureAwait(false) : "";
+
+            // 취약점/약한 설정 평가: 규칙(버전·노출 서비스) + TLS 검사. 실패해도 스캔은 계속된다.
+            int riskScore = 0;
+            string findingsJson = "";
+            if (Options.AssessVulnerabilities && usePortChecking && open.Count > 0)
+            {
+                try
+                {
+                    IReadOnlyList<Finding> tls = await RuleEngine.AssessTlsAsync(targetIp, openPorts, Options.TlsTimeoutMs, ct).ConfigureAwait(false);
+                    HostAssessment assessment = RuleEngine.Default.Assess(targetIp, openPorts, service, tls);
+                    riskScore = assessment.Score;
+                    findingsJson = assessment.Findings.Count == 0 ? "" : System.Text.Json.JsonSerializer.Serialize(assessment.Findings, FindingsJsonOptions);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { AppLogger.LogWarn("NetworkScanner", $"assessment failed for {targetIp}: {ex.Message}"); }
+            }
+            string chosenName = HostIdentityMerge.ChooseName(hostName, identity) ?? "";
 
             bool changed = false;
             lock (_itemsLock)
@@ -688,19 +821,58 @@ namespace NetworkScanner
                 {
                     if (!string.IsNullOrEmpty(mac)) info.Macaddr = mac;
                     if (!string.IsNullOrEmpty(vendor)) info.Vendor = vendor;
-                    if (string.IsNullOrEmpty(info.SystemName) && !string.IsNullOrEmpty(hostName) && hostName != targetIp)
-                        info.SystemName = hostName;
+                    if (string.IsNullOrEmpty(info.SystemName) && !string.IsNullOrEmpty(chosenName) && chosenName != targetIp)
+                        info.SystemName = chosenName;
+                    if (identity != null)
+                    {
+                        info.IdentitySource = identity.Source;
+                        if (!string.IsNullOrEmpty(identity.Description)) info.SysDescr = identity.Description;
+                        if (!string.IsNullOrEmpty(identity.OsHint)) info.OsHint = identity.OsHint;
+                        if (!string.IsNullOrEmpty(identity.DeviceHint)) info.DeviceHint = identity.DeviceHint;
+                        if (string.IsNullOrEmpty(info.Macaddr) && identity.Attributes.TryGetValue(HostIdentity.AttrNetBiosMac, out string? nbMac) && !string.IsNullOrEmpty(nbMac))
+                        {
+                            info.Macaddr = nbMac;
+                            info.Vendor = _oui.GetVender(nbMac);
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(hostName) && hostName != targetIp)
+                    {
+                        info.IdentitySource = "DNS";
+                    }
                     if (usePortChecking)
                     {
                         info.Ports = openPorts;
                         info.HasProhibitedPort = hasProhibited;
                         if (!string.IsNullOrEmpty(service)) info.Service = service;
+                        info.RiskScore = riskScore;
+                        info.FindingsJson = findingsJson;
                     }
                     changed = true;
                 }
             }
 
             if (changed) ItemsRefreshNeeded?.Invoke();
+        }
+
+        private static readonly System.Text.Json.JsonSerializerOptions FindingsJsonOptions = new()
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        };
+
+        // 옵션에 맞는 식별 프로브(SNMP/mDNS/NetBIOS 조합)를 한 번만 만든다. 테스트/오프라인 서비스는 끈다.
+        private IIdentityProbe? GetIdentityProbe()
+        {
+            if (_identityBuilt) return _identity;
+            _identityBuilt = true;
+            if (_services.IdentityDisabled || !Options.IdentityProbes) return _identity = _services.Identity;
+            if (_services.Identity != null) return _identity = _services.Identity;
+
+            var probes = new List<IIdentityProbe>();
+            if (Options.NetBiosEnabled) probes.Add(new NetBiosProbe());
+            if (Options.MdnsEnabled) probes.Add(new MdnsProbe());
+            if (Options.SnmpEnabled) probes.Add(new SnmpProbe(Options.SnmpCommunity));
+            return _identity = probes.Count == 0 ? null : new CompositeIdentityProbe(probes);
         }
 
         private async Task<string> GrabServiceAsync(string ip, List<int> open, CancellationToken ct)

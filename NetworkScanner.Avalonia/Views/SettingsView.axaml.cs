@@ -1,9 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Platform.Storage;
+using NetworkScanner.Alerts;
 using NetworkScanner.Avalonia.Helpers;
+using NetworkScanner.History;
+using NetworkScanner.Support;
 using NetworkScanner.Upload;
 
 namespace NetworkScanner.Avalonia.Views
@@ -27,11 +34,34 @@ namespace NetworkScanner.Avalonia.Views
         // 설정이 저장될 때마다 발생. MainWindow가 엔진 옵션(동시성/상한)을 갱신하는 데 쓴다.
         public event Action<AppSettingsData>? SettingsSaved;
 
+        // "지금 백업"/진단 번들이 쓰는 이력 DB. MainWindow가 엔진과 같은 인스턴스를 넘겨준다(null이면 백업 불가).
+        private ScanHistoryStore? _history;
+
         public SettingsView()
         {
             InitializeComponent();
             BuildHourCheckboxes();
+            BuildProfileCombo();
             LoadFromStore();
+        }
+
+        public void SetHistory(ScanHistoryStore? history)
+        {
+            _history = history;
+            BtnBackupNow.IsEnabled = history != null;
+        }
+
+        private void BuildProfileCombo()
+        {
+            foreach (ScanProfileKind kind in ScanProfiles.All)
+                CmbProfile.Items.Add(new ComboBoxItem { Content = ScanProfiles.DisplayName(kind), Tag = ScanProfiles.Name(kind) });
+        }
+
+        // IP 목록 화면의 프로필 콤보에서 바꾼 값을 이 화면에도 반영한다(저장은 그쪽에서 이미 했다).
+        public void SetScanProfile(string name)
+        {
+            SelectByTag(CmbProfile, ScanProfiles.Name(ScanProfiles.Parse(name)));
+            _loaded.ScanProfile = ScanProfiles.Name(ScanProfiles.Parse(name));
         }
 
         private void BuildHourCheckboxes()
@@ -46,11 +76,12 @@ namespace NetworkScanner.Avalonia.Views
 
         private void LoadFromStore()
         {
+            ScanRanges.Clear();
             foreach (var range in AppSettingsStore.LoadScanRanges())
             {
                 ScanRanges.AddItem(range);
             }
-            DgIPRange.ItemsSource = ScanRanges;
+            RefreshGrid();
 
             ApplySettingsToControls(AppSettingsStore.LoadSettings());
         }
@@ -99,6 +130,23 @@ namespace NetworkScanner.Avalonia.Views
             ChkContinuousMonitoring.IsChecked = data.ContinuousMonitoring;
             TbMonitorInterval.Text = data.MonitorIntervalMinutes.ToString();
             CmbLanguage.SelectedIndex = data.Language == Localization.Korean ? 1 : 0;
+
+            ChkAlertUnapproved.IsChecked = data.AssetPolicy.AlertOnUnapproved;
+            ChkAutoApprove.IsChecked = data.AssetPolicy.AutoApproveFirstScan;
+            TbHighRisk.Text = data.AssetPolicy.HighRiskThreshold.ToString();
+
+            TbRenotify.Text = data.Alerts.RenotifyAfterHours.ToString();
+            TbMaintenance.Text = data.Alerts.MaintenanceWindows;
+
+            ChkSnmp.IsChecked = data.Identity.Snmp;
+            TbSnmpCommunity.Text = data.Identity.SnmpCommunity;
+            ChkMdns.IsChecked = data.Identity.Mdns;
+            ChkNetBios.IsChecked = data.Identity.NetBios;
+            ChkVuln.IsChecked = data.AssessVulnerabilities;
+
+            TbRetention.Text = data.HistoryRetentionDays.ToString();
+            TbBackups.Text = data.HistoryBackupsToKeep.ToString();
+            SelectByTag(CmbProfile, ScanProfiles.Name(ScanProfiles.Parse(data.ScanProfile)));
         }
 
         private AppSettingsData CollectSettingsFromControls()
@@ -148,6 +196,29 @@ namespace NetworkScanner.Avalonia.Views
                 Language = CmbLanguage.SelectedIndex == 1 ? Localization.Korean : Localization.English,
                 IpListColumnWidths = _loaded.IpListColumnWidths,
                 IpRangeColumnWidths = _loaded.IpRangeColumnWidths,
+                AssetPolicy = new AssetPolicySettings
+                {
+                    AlertOnUnapproved = ChkAlertUnapproved.IsChecked == true,
+                    AutoApproveFirstScan = ChkAutoApprove.IsChecked == true,
+                    HighRiskThreshold = ParseInt(TbHighRisk.Text, _loaded.AssetPolicy.HighRiskThreshold),
+                },
+                Alerts = new AlertSettings
+                {
+                    // 숫자가 아니면 -1로 두어 Validate()가 걸러내게 한다.
+                    RenotifyAfterHours = ParseInt(TbRenotify.Text, -1),
+                    MaintenanceWindows = (TbMaintenance.Text ?? "").Trim(),
+                },
+                Identity = new IdentitySettings
+                {
+                    Snmp = ChkSnmp.IsChecked == true,
+                    SnmpCommunity = string.IsNullOrWhiteSpace(TbSnmpCommunity.Text) ? "public" : TbSnmpCommunity.Text!.Trim(),
+                    Mdns = ChkMdns.IsChecked == true,
+                    NetBios = ChkNetBios.IsChecked == true,
+                },
+                AssessVulnerabilities = ChkVuln.IsChecked == true,
+                ScanProfile = SelectedTag(CmbProfile) ?? "standard",
+                HistoryRetentionDays = ParseInt(TbRetention.Text, -1),
+                HistoryBackupsToKeep = Math.Max(0, ParseInt(TbBackups.Text, _loaded.HistoryBackupsToKeep)),
             };
 
             for (int i = 0; i < 24; i++) data.HourEnabled[i] = _hourCheckboxes[i].IsChecked == true;
@@ -161,6 +232,10 @@ namespace NetworkScanner.Avalonia.Views
             if (string.IsNullOrWhiteSpace(text)) return whenBlank;
             return int.TryParse(text.Trim(), out int p) ? p : -1;
         }
+
+        // 숫자가 아니거나 비어 있으면 fallback.
+        private static int ParseInt(string? text, int fallback)
+            => int.TryParse((text ?? "").Trim(), out int v) ? v : fallback;
 
         private static string? SelectedTag(ComboBox combo) => (combo.SelectedItem as ComboBoxItem)?.Tag as string;
 
@@ -303,6 +378,148 @@ namespace NetworkScanner.Avalonia.Views
         private async void BtnSaveFile_Click(object? sender, RoutedEventArgs e)
         {
             if (await SaveSettingsAsync()) SaveScanRanges();
+        }
+
+        // ---- 이력 백업/복원 ----
+
+        // 열려 있는 DB를 VACUUM INTO로 일관되게 복사한다(backups/history-날짜.db).
+        private async void BtnBackupNow_Click(object? sender, RoutedEventArgs e)
+        {
+            if (_history == null) return;
+            try
+            {
+                Directory.CreateDirectory(HistoryMaintenance.BackupDirectory);
+                string path = Path.Combine(HistoryMaintenance.BackupDirectory, $"history-{DateTime.Now:yyyyMMdd-HHmmss}.db");
+                ScanHistoryStore history = _history;
+                await Task.Run(() => history.BackupTo(path));
+                TbMsg.Text = string.Format(Localization.T("msg.history.backup.saved"), path);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "history backup failed", ex);
+                TbMsg.Text = string.Format(Localization.T("msg.history.backup.failed"), ex.Message);
+            }
+        }
+
+        // 백업 파일을 고르면 마커 파일에 적어 두고, 다음 시작 때 MainWindow가 엔진을 만들기 전에 덮어쓴다.
+        private async void BtnRestore_Click(object? sender, RoutedEventArgs e)
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel?.StorageProvider == null || topLevel is not Window owner) return;
+
+            Directory.CreateDirectory(HistoryMaintenance.BackupDirectory);
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Localization.T("history.restore"),
+                AllowMultiple = false,
+                SuggestedStartLocation = await topLevel.StorageProvider.TryGetFolderFromPathAsync(HistoryMaintenance.BackupDirectory),
+                FileTypeFilter = new[] { new FilePickerFileType("SQLite") { Patterns = new[] { "*.db" } } },
+            });
+            string? path = files.FirstOrDefault()?.TryGetLocalPath();
+            if (string.IsNullOrEmpty(path)) return;
+
+            if (!await SimpleDialogs.ShowConfirmAsync(owner, $"{Localization.T("history.restore.confirm")}\n\n{path}", Localization.T("history.restore")))
+                return;
+
+            try
+            {
+                HistoryRestore.Schedule(path);
+                TbMsg.Text = Localization.T("msg.history.restore.pending");
+                await SimpleDialogs.ShowMessageAsync(owner, Localization.T("msg.history.restore.pending"), Localization.T("history.restore"));
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "history restore schedule failed", ex);
+                TbMsg.Text = string.Format(Localization.T("msg.history.restore.failed"), ex.Message);
+            }
+        }
+
+        // ---- 설정 내보내기 / 가져오기 / 진단 번들 ----
+
+        private async void BtnExport_Click(object? sender, RoutedEventArgs e)
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel?.StorageProvider == null) return;
+
+            var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = Localization.T("settings.export"),
+                SuggestedFileName = $"netscan-settings-{DateTime.Now:yyyyMMdd}.json",
+                DefaultExtension = "json",
+                FileTypeChoices = new[] { new FilePickerFileType("JSON") { Patterns = new[] { "*.json" } } },
+            });
+            string? path = file?.TryGetLocalPath();
+            if (string.IsNullOrEmpty(path)) return;
+
+            try
+            {
+                AppSettingsStore.Export(path);
+                TbMsg.Text = string.Format(Localization.T("msg.settings.exported"), path);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "settings export failed", ex);
+                TbMsg.Text = string.Format(Localization.T("msg.settings.exportfailed"), ex.Message);
+            }
+        }
+
+        // 가져온 뒤 화면과 대역 목록을 다시 읽고, 엔진 옵션도 갱신되도록 SettingsSaved를 올린다.
+        private async void BtnImport_Click(object? sender, RoutedEventArgs e)
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel?.StorageProvider == null) return;
+
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Localization.T("settings.import"),
+                AllowMultiple = false,
+                FileTypeFilter = new[] { new FilePickerFileType("JSON") { Patterns = new[] { "*.json" } } },
+            });
+            string? path = files.FirstOrDefault()?.TryGetLocalPath();
+            if (string.IsNullOrEmpty(path)) return;
+
+            try
+            {
+                AppSettingsStore.Import(path);
+                LoadFromStore();
+                TbMsg.Text = Localization.T("msg.settings.imported");
+                SettingsSaved?.Invoke(_loaded);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "settings import failed", ex);
+                TbMsg.Text = string.Format(Localization.T("msg.settings.importfailed"), ex.Message);
+            }
+        }
+
+        private async void BtnDiag_Click(object? sender, RoutedEventArgs e)
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel?.StorageProvider == null) return;
+
+            string defaultPath = DiagnosticBundle.DefaultPath();
+            var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = Localization.T("settings.diag"),
+                SuggestedFileName = Path.GetFileName(defaultPath),
+                SuggestedStartLocation = await topLevel.StorageProvider.TryGetFolderFromPathAsync(Path.GetDirectoryName(defaultPath) ?? UserDataPaths.Root),
+                DefaultExtension = "zip",
+                FileTypeChoices = new[] { new FilePickerFileType("ZIP") { Patterns = new[] { "*.zip" } } },
+            });
+            string? path = file?.TryGetLocalPath();
+            if (string.IsNullOrEmpty(path)) return;
+
+            try
+            {
+                ScanHistoryStore? history = _history;
+                string created = await Task.Run(() => DiagnosticBundle.Create(path, history: history));
+                TbMsg.Text = string.Format(Localization.T("msg.diag.created"), created);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", "diagnostic bundle failed", ex);
+                TbMsg.Text = string.Format(Localization.T("msg.diag.failed"), ex.Message);
+            }
         }
     }
 }

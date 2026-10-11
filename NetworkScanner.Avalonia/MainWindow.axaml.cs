@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using NetworkScanner.Alerts;
 using NetworkScanner.Notifications;
 using NetworkScanner.Upload;
 using System.Reflection;
@@ -9,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using NetworkScanner.Avalonia.Helpers;
 using NetworkScanner.Avalonia.Views;
 
 namespace NetworkScanner.Avalonia;
@@ -41,15 +43,26 @@ public partial class MainWindow : Window, IScanConfigProvider
         // 저장해 둔 컬럼 너비 복원, 종료 시 현재 너비 저장.
         AppSettingsData startup = _settingsView.GetCurrentSettings();
 
+        // 설정 화면에서 예약한 이력 DB 복원은 엔진이 DB를 열기 전에 적용해야 한다.
+        ApplyPendingHistoryRestore();
+
         // 엔진에는 실제 업로드 outbox + SQLite 이력을 연결하고, 동시성/상한은 설정값으로 시작한다.
         _services = ScanServices.CreateDefault();
         _ipListView.Initialize(this, _services, ScanOptions.FromSettings(startup));
-        _ipListView.ChangesDetected += OnScanChangesDetected;
+        _ipListView.AlertsProcessed += OnAlertsProcessed;
         _ipListView.ScanFinished += OnScanFinished;
-        _settingsView.SettingsSaved += data => _ipListView.ApplyOptions(ScanOptions.FromSettings(data));
+        _ipListView.ProfileChanged += _settingsView.SetScanProfile;
+        _settingsView.SettingsSaved += data =>
+        {
+            _ipListView.ApplyOptions(ScanOptions.FromSettings(data));
+            _ipListView.SetProfile(data.ScanProfile);
+        };
+        _settingsView.SetHistory(_services.History);
         _historyView.Initialize(_services.History);
+        _historyView.AlertsChanged += UpdateAlertsLabel;
         ContentArea.Content = _ipListView;
         SetActiveNav(BtnIPList);
+        UpdateAlertsLabel();
 
         var version = Assembly.GetExecutingAssembly().GetName().Version;
         TbVersion.Text = "ver. " + (version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "unknown");
@@ -94,12 +107,36 @@ public partial class MainWindow : Window, IScanConfigProvider
         }
     }
 
-    // 변화 감지 시 설정된 알림 채널(웹훅/syslog/메일)로 보낸다. 실패해도 스캔/UI에는 영향을 주지 않는다.
-    private void OnScanChangesDetected(IReadOnlyList<ScanChange> changes)
+    // 마커 파일(history.restore)이 있으면 백업을 history.db 자리에 복사한다. 실패해도 앱은 그대로 뜬다(로그만).
+    private void ApplyPendingHistoryRestore()
     {
+        try
+        {
+            string? source = HistoryRestore.ApplyPending();
+            if (source != null) AppLogger.LogInfo("NetworkScanner", string.Format(Localization.T("msg.history.restored"), source));
+        }
+        catch (Exception ex)
+        {
+            AppLogger.LogError("NetworkScanner", string.Format(Localization.T("msg.history.restore.failed"), ex.Message), ex);
+        }
+    }
+
+    // 알림 운영 규칙을 거친 변화만 설정된 알림 채널(웹훅/syslog/메일)로 보낸다. 화면 경고/로그는 IPListView가
+    // ScanChangesDetected에서 따로 처리한다. 실패해도 스캔/UI에는 영향을 주지 않는다.
+    private void OnAlertsProcessed(AlertOutcome outcome)
+    {
+        UpdateAlertsLabel();
+        if (outcome.Resolved > 0 || outcome.Suppressed.Count > 0)
+        {
+            AppLogger.LogInfo("NetworkScanner",
+                $"alerts: {outcome.Resolved} {Localization.T("change.resolved")}, {outcome.Suppressed.Count} {Localization.T("change.suppressed")}"
+                + (outcome.InMaintenance ? " (maintenance)" : ""));
+        }
+
         AppSettingsData settings = _settingsView.GetCurrentSettings();
-        if (!settings.Notifications.Enabled) return;
+        if (!settings.Notifications.Enabled || outcome.ChangesToNotify.Count == 0) return;
         string systemName = GetSystemName();
+        IReadOnlyList<ScanChange> changes = outcome.ChangesToNotify;
 
         _ = Task.Run(async () =>
         {
@@ -118,9 +155,21 @@ public partial class MainWindow : Window, IScanConfigProvider
     private void OnScanFinished()
     {
         UpdateOutboxLabel();
+        UpdateAlertsLabel();
         if (!_flushAfterScan) return;
         _flushAfterScan = false;
         _ = FlushOutboxAsync();
+    }
+
+    // 사이드바에 "열린 알림: N"을 표시한다(0이거나 이력 DB가 없으면 숨김).
+    private void UpdateAlertsLabel()
+    {
+        int open = 0;
+        try { open = _services?.History?.ListAlerts().Count ?? 0; }
+        catch (Exception ex) { AppLogger.LogError("NetworkScanner", "alert count failed", ex); }
+
+        TbAlerts.Text = string.Format(Localization.T("sidebar.alerts"), open);
+        TbAlerts.IsVisible = open > 0;
     }
 
     // 전송 실패로 outbox에 밀린 결과 파일을 다시 보낸다(시작 시, 예약 스캔 후).

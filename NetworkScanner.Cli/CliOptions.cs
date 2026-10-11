@@ -2,8 +2,8 @@ using NetworkScanner;
 
 namespace NetworkScanner.Cli;
 
-internal enum OutputFormat { Table, Json, Csv, Html }
-internal enum CliCommand { Scan, History }
+internal enum OutputFormat { Table, Json, Csv, Html, Pdf }
+internal enum CliCommand { Scan, History, Assets, Alerts, Settings, Diag }
 
 // 명령행 옵션 파서. 최소한의 GNU 스타일 --옵션만 다룬다.
 internal sealed class CliOptions
@@ -11,6 +11,14 @@ internal sealed class CliOptions
     public CliCommand Command { get; private set; } = CliCommand.Scan;
     public string HistorySub { get; private set; } = "scans";   // scans|inventory|host|prune
     public string? HistoryArg { get; private set; }
+    public string Sub { get; private set; } = "";               // assets/alerts/settings 하위 명령
+    public List<string> Args { get; } = new();                   // 하위 명령 위치 인자
+    public string? Owner { get; private set; }
+    public string? Tags { get; private set; }
+    public string? Note { get; private set; }
+    public bool All { get; private set; }
+    public string? Profile { get; private set; }
+    public bool PdfNeedsFile { get; set; }
     public int HistoryLimit { get; private set; } = 50;
 
     public List<ScanRangeInfo> Ranges { get; } = new();
@@ -36,7 +44,14 @@ internal sealed class CliOptions
     {
         var o = new CliOptions();
         int start = 0;
-        if (args.Length > 0 && args[0] == "history")
+        if (args.Length > 0 && args[0] is "assets" or "alerts" or "settings" or "diag")
+        {
+            o.Command = args[0] switch { "assets" => CliCommand.Assets, "alerts" => CliCommand.Alerts, "settings" => CliCommand.Settings, _ => CliCommand.Diag };
+            start = 1;
+            if (args.Length > 1 && !args[1].StartsWith('-')) { o.Sub = args[1]; start = 2; }
+            while (start < args.Length && !args[start].StartsWith('-')) o.Args.Add(args[start++]);
+        }
+        else if (args.Length > 0 && args[0] == "history")
         {
             o.Command = CliCommand.History;
             start = 1;
@@ -98,9 +113,11 @@ internal sealed class CliOptions
                         "json" => OutputFormat.Json,
                         "csv" => OutputFormat.Csv,
                         "html" => OutputFormat.Html,
+                        "pdf" => OutputFormat.Pdf,
                         _ => OutputFormat.Table,
                     };
-                    if (v is not ("table" or "json" or "csv" or "html")) return o.Fail($"invalid --output: {v} (table|json|csv|html)");
+                    if (v is not ("table" or "json" or "csv" or "html" or "pdf")) return o.Fail($"invalid --output: {v} (table|json|csv|html|pdf)");
+                    if (v == "pdf" && o.OutFile == null) o.PdfNeedsFile = true;
                     break;
                 }
 
@@ -151,6 +168,19 @@ internal sealed class CliOptions
                 case "--use-settings":
                     o.UseSettings = true;
                     break;
+
+                case "--profile":
+                {
+                    string? v = Next()?.ToLowerInvariant();
+                    if (v is not ("quick" or "standard" or "thorough")) return o.Fail("--profile must be quick|standard|thorough");
+                    o.Profile = v;
+                    break;
+                }
+
+                case "--owner": o.Owner = Next() ?? ""; break;
+                case "--tags": o.Tags = Next() ?? ""; break;
+                case "--note": o.Note = Next() ?? ""; break;
+                case "--all": o.All = true; break;
 
                 case "--upload":
                     o.Upload = true;
@@ -226,6 +256,10 @@ internal sealed class CliOptions
 USAGE:
   netscan [options]                          scan
   netscan history [scans|inventory|host <ip>|prune <days>] [--limit N] [-o json]
+  netscan assets [list|approve <ip…>|unapprove <ip…>|set <ip> --owner X --tags a,b --note N] [--all]
+  netscan alerts [list|ack <id>|snooze <id> [hours]|reopen <id>] [-o json]
+  netscan settings [export <file>|import <file>]
+  netscan diag [<zip path>]                  create a support/diagnostic bundle
 
 SCAN OPTIONS:
   --range <CIDR|start-end|ip>   Range to scan (repeatable). Examples:
@@ -241,8 +275,9 @@ SCAN OPTIONS:
   --scheduled                   Behave like a scheduled scan: save CSV + HTML report to the
                                 user data folder (and upload when --upload)
   --parallelism <1-512>         Hosts scanned concurrently (default: 64 or saved setting)
+  --profile quick|standard|thorough  Scan profile (quick: ping only; thorough: top ports, identity, vuln)
   --allow <list>                Risky-port exceptions: port | ip:port | ip | cidr:port (repeatable)
-  -o, --output <table|json|csv|html>  Output format (default: table)
+  -o, --output <table|json|csv|html|pdf>  Output format (default: table; pdf requires --out)
   --out <file>                  Write output to a file instead of stdout
   --system-name <name>          System name recorded with results (default: saved or hostname)
   --lang <en|ko>                Language for messages/labels (default: en)

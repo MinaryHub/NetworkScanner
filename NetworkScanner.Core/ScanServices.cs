@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using NetworkScanner.Alerts;
+using NetworkScanner.Discovery;
 using NetworkScanner.History;
 using NetworkScanner.Network;
 using NetworkScanner.Platform;
@@ -15,6 +17,8 @@ namespace NetworkScanner
         public int PortTimeoutMs { get; set; } = 300;
         public int BannerTimeoutMs { get; set; } = 700;
         public int DnsTimeoutMs { get; set; } = 1500;
+        public int IdentityTimeoutMs { get; set; } = 1500;
+        public int TlsTimeoutMs { get; set; } = 3000;
 
         // 대역 전체를 훑는 동시성(호스트 수)과 호스트 한 대 안에서 포트를 동시에 두드리는 수.
         public int Parallelism { get; set; } = 64;
@@ -31,12 +35,46 @@ namespace NetworkScanner
         // 위험 포트 예외(RiskPolicy 형식). 설정 화면/CLI --allow 에서 온다.
         public List<string> RiskAllowList { get; set; } = new();
 
-        public static ScanOptions FromSettings(AppSettingsData s) => new()
+        // 식별 프로브(SNMP/mDNS/NetBIOS), 배너 수집, 취약점 평가 사용 여부와 추가 검사 포트(정밀 프로필).
+        public bool IdentityProbes { get; set; } = true;
+        public bool BannerGrab { get; set; } = true;
+        public bool AssessVulnerabilities { get; set; } = true;
+        public int[] ExtraPorts { get; set; } = Array.Empty<int>();
+        public string SnmpCommunity { get; set; } = "public";
+        public bool SnmpEnabled { get; set; } = true;
+        public bool MdnsEnabled { get; set; } = true;
+        public bool NetBiosEnabled { get; set; } = true;
+        public ScanProfileKind Profile { get; set; } = ScanProfileKind.Standard;
+
+        // 이력 보존/백업(스캔 후 하루 한 번 수행).
+        public int HistoryRetentionDays { get; set; } = 180;
+        public int HistoryBackupsToKeep { get; set; } = 3;
+
+        // 자산 승인 정책과 알림 운영 설정(이력 DB가 있을 때만 의미 있다).
+        public AssetPolicy AssetPolicy { get; set; } = AssetPolicy.Disabled;
+        public bool AutoApproveFirstScan { get; set; } = true;
+        public AlertSettings Alerts { get; set; } = new();
+        public bool SecurityOnlyAlerts { get; set; } = true;
+
+        public static ScanOptions FromSettings(AppSettingsData s) => ScanProfiles.Apply(new ScanOptions
         {
             Parallelism = Math.Clamp(s.ScanParallelism, 1, 512),
             MaxTargets = Math.Max(1, s.MaxTargets),
             RiskAllowList = RiskPolicy.ParseAllowList(s.RiskAllowList).Valid,
-        };
+            AssetPolicy = new AssetPolicy(s.AssetPolicy.AlertOnUnapproved, s.AssetPolicy.HighRiskThreshold),
+            AutoApproveFirstScan = s.AssetPolicy.AutoApproveFirstScan,
+            Alerts = s.Alerts,
+            SecurityOnlyAlerts = s.Notifications.OnSecurityOnly,
+            AssessVulnerabilities = s.AssessVulnerabilities,
+            IdentityProbes = s.Identity.Snmp || s.Identity.Mdns || s.Identity.NetBios,
+            SnmpEnabled = s.Identity.Snmp,
+            SnmpCommunity = string.IsNullOrWhiteSpace(s.Identity.SnmpCommunity) ? "public" : s.Identity.SnmpCommunity,
+            MdnsEnabled = s.Identity.Mdns,
+            NetBiosEnabled = s.Identity.NetBios,
+            Profile = ScanProfiles.Parse(s.ScanProfile),
+            HistoryRetentionDays = Math.Max(0, s.HistoryRetentionDays),
+            HistoryBackupsToKeep = Math.Max(0, s.HistoryBackupsToKeep),
+        }, ScanProfiles.Parse(s.ScanProfile));
     }
 
     // 엔진이 사용하는 외부 의존성 묶음. 기본값은 실제 네트워크 구현이고, 테스트는 가짜를 끼운다.
@@ -46,6 +84,9 @@ namespace NetworkScanner
         public IPortProber Ports { get; init; } = new TcpPortProber();
         public IArpResolver Arp { get; init; } = ArpResolverFactory.CreateForCurrentOS();
         public IHostNameResolver Dns { get; init; } = new DnsHostNameResolver();
+        // null이면 엔진이 옵션(SNMP/mDNS/NetBIOS 사용 여부, 커뮤니티)에 맞춰 기본 프로브를 만든다. 테스트는 가짜를 끼운다.
+        public IIdentityProbe? Identity { get; init; }
+        public bool IdentityDisabled { get; init; }
         public UploadService? Uploader { get; init; }
         public ScanHistoryStore? History { get; init; }
         public Func<DateTime> Clock { get; init; } = () => DateTime.Now;
@@ -74,6 +115,7 @@ namespace NetworkScanner
                 Ports = ports ?? new ClosedPortProber(),
                 Arp = arp ?? new NullArpResolver(),
                 Dns = dns ?? new NoHostNameResolver(),
+                IdentityDisabled = true,
             };
 
         private sealed class NeverPinger : IPinger

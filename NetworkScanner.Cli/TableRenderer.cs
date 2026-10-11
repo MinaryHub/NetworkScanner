@@ -12,11 +12,12 @@ internal static class TableRenderer
                          .OrderBy(i => SortKey(i.Ip))
                          .ToList();
 
-        var headers = new[] { "IP", "STATUS", "NAME", "TYPE", "OS", "PORTS", "SERVICE", "MAC", "VENDOR", "RTT" };
+        var headers = new[] { "IP", "STATUS", "NAME", "TYPE", "OS", "PORTS", "SERVICE", "MAC", "VENDOR", "RISK", "RTT" };
         var rows = alive.Select(i => new[]
         {
             i.Ip ?? "", i.StatusText ?? "", i.SystemName ?? "", i.DeviceType ?? "", i.OsGuess ?? "",
-            i.Ports ?? "", Truncate(i.Service, 28), i.Macaddr ?? "", Truncate(i.Vendor, 22), i.RountTime ?? ""
+            i.Ports ?? "", Truncate(i.Service, 28), i.Macaddr ?? "", Truncate(i.Vendor, 22),
+            i.RiskScore > 0 ? i.RiskScore.ToString() : "", i.RountTime ?? ""
         }).ToList();
 
         // 각 열 너비 = 헤더/값 중 최대 길이(과도하게 길어지지 않도록 상한도 둔다).
@@ -39,6 +40,8 @@ internal static class TableRenderer
         sb.AppendLine();
         sb.Append($"alive: {aliveCount}   scanned: {total}");
         if (prohibited > 0) sb.Append($"   risky-port hosts: {prohibited}");
+        int highRisk = items.Count(i => i.Alive && i.RiskScore >= 40);
+        if (highRisk > 0) sb.Append($"   high-risk hosts: {highRisk}");
 
         return sb.ToString();
     }

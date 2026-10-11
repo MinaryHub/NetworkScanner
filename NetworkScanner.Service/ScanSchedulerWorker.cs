@@ -97,7 +97,14 @@ public sealed class ScanSchedulerWorker : BackgroundService
         engine.ScanChangesDetected += changes =>
         {
             foreach (var c in changes) _log.LogInformation("change: {Change}", ScanDiff.Describe(c));
-            try { notifier.NotifyChangesAsync(settings.SystemName, changes, ct).GetAwaiter().GetResult(); }
+        };
+        // 알림 운영 규칙을 거친 것만 보낸다(중복 억제, 확인/스누즈, 점검 시간대).
+        engine.AlertsProcessed += outcome =>
+        {
+            if (outcome.Resolved > 0 || outcome.Suppressed.Count > 0)
+                _log.LogInformation("alerts: {Resolved} resolved, {Suppressed} suppressed, maintenance={Maint}", outcome.Resolved, outcome.Suppressed.Count, outcome.InMaintenance);
+            if (outcome.ChangesToNotify.Count == 0) return;
+            try { notifier.NotifyChangesAsync(settings.SystemName, outcome.ChangesToNotify, ct).GetAwaiter().GetResult(); }
             catch (Exception ex) { _log.LogWarning("notify failed: {Message}", ex.Message); }
         };
 

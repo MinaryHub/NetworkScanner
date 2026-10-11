@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased (2.1.0) — commercial feature set
+
+### Added
+- **Asset approval baseline**: inventory hosts can be approved (MAC pinned at approval time), given an owner, tags and a note. Optional policy alerts on unapproved live devices (`UnapprovedHost`) and on approved hosts whose MAC changed (`ApprovedMacMismatch`). The first scan can auto-approve everything it finds. GUI inventory actions, `netscan assets …`.
+- **Alert operations**: alerts are deduplicated per event, acknowledged or snoozed, suppressed during maintenance windows (`Mon-Fri 22:00-06:00; Sat,Sun`), re-notified after a configurable interval and auto-resolved when the condition disappears. Alerts view in the GUI, `netscan alerts …`.
+- **Device identification** via SNMP v2c (sysDescr/sysName/sysObjectID), mDNS and NetBIOS, merged with reverse DNS; OS/device hints improve the type/OS columns.
+- **Vulnerability & weak-configuration assessment** (offline rule set `data/vulnrules.json`: vulnerable service versions, exposed/legacy services, TLS certificate and protocol checks) with a per-host risk score and `HighRisk` alerts.
+- **PDF report** (A4, Korean-capable embedded font) next to HTML/JSON.
+- **Scan profiles** quick / standard / thorough (`--profile`), settings export/import, diagnostic support bundle (`netscan diag`), history retention and daily rotating backups with restore.
+
 ## Unreleased (2.0.0)
 
 Platform-independent, production-hardening rewrite. Everything below ships in one release.

@@ -35,9 +35,13 @@ AppLogger.Sink += (level, _, m) => { if (level >= NetworkScanner.LogLevel.Error)
 AppSettingsData? saved = options.UseSettings ? AppSettingsStore.LoadSettings() : null;
 Localization.Current = options.LanguageSet ? options.Language : (saved?.Language ?? options.Language);
 
-if (options.Command == CliCommand.History)
+switch (options.Command)
 {
-    return RunHistory(options);
+    case CliCommand.History: return RunHistory(options);
+    case CliCommand.Assets: return RunAssets(options);
+    case CliCommand.Alerts: return RunAlerts(options);
+    case CliCommand.Settings: return RunSettings(options);
+    case CliCommand.Diag: return RunDiag(options);
 }
 
 // 스캔 대역 결정: --range → settings.json → 로컬 서브넷 자동 감지 순.
@@ -83,6 +87,7 @@ var services = ScanServices.CreateDefault(withHistory: !options.NoHistory);
 var engineOptions = saved != null ? ScanOptions.FromSettings(saved) : new ScanOptions();
 if (options.Parallelism > 0) engineOptions.Parallelism = options.Parallelism;
 engineOptions.RiskAllowList.AddRange(options.Allow);
+if (options.Profile != null) ScanProfiles.Apply(engineOptions, ScanProfiles.Parse(options.Profile));
 var engine = new ScanEngine(items, oui, config, services, engineOptions);
 
 bool quiet = options.Quiet || Console.IsErrorRedirected;
@@ -92,12 +97,25 @@ engine.ScanChangesDetected += changes =>
 {
     foreach (var c in changes)
         Console.Error.WriteLine("change: " + ScanDiff.Describe(c));
-    if (notifier != null)
+};
+// 알림 운영 규칙(중복/확인/스누즈/점검 시간대)을 거친 것만 외부 채널로 보낸다. 이력 DB가 없으면(--no-history) 전부 보낸다.
+engine.AlertsProcessed += outcome =>
+{
+    if (outcome.Resolved > 0) Console.Error.WriteLine($"alerts: {outcome.Resolved} resolved, {outcome.Suppressed.Count} suppressed{(outcome.InMaintenance ? " (maintenance window)" : "")}");
+    if (notifier != null && outcome.ChangesToNotify.Count > 0)
     {
-        try { notifier.NotifyChangesAsync(config.GetSystemName(), changes, CancellationToken.None).GetAwaiter().GetResult(); }
+        try { notifier.NotifyChangesAsync(config.GetSystemName(), outcome.ChangesToNotify, CancellationToken.None).GetAwaiter().GetResult(); }
         catch (Exception ex) { Console.Error.WriteLine("warn: notify failed: " + ex.Message); }
     }
 };
+if (options.NoHistory && notifier != null)
+{
+    engine.ScanChangesDetected += changes =>
+    {
+        try { notifier.NotifyChangesAsync(config.GetSystemName(), changes, CancellationToken.None).GetAwaiter().GetResult(); }
+        catch (Exception ex) { Console.Error.WriteLine("warn: notify failed: " + ex.Message); }
+    };
+}
 
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; engine.ScanningStop(); };
 
@@ -117,6 +135,15 @@ if (engine.Scanning != null) await engine.Scanning;
 string ts = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 List<IPInfo> results;
 lock (engine.ItemsSyncRoot) results = new(items);
+if (options.Output == OutputFormat.Pdf)
+{
+    if (options.OutFile == null) { Console.Error.WriteLine("error: -o pdf requires --out <file>"); return 2; }
+    await NetworkScanner.Reports.PdfReport.SaveAsync(options.OutFile, results, config.GetSystemName(), ts);
+    Console.Error.WriteLine($"info: wrote PDF report to {options.OutFile}");
+    services.History?.Dispose();
+    return results.Any(i => i.HasProhibitedPort) ? 3 : 0;
+}
+
 string rendered = options.Output switch
 {
     OutputFormat.Json => ReportGenerator.BuildJson(results, config.GetSystemName(), ts),
@@ -214,3 +241,101 @@ static int RunHistory(CliOptions o)
 }
 
 static string Trunc(string s, int n) => s.Length <= n ? s : s.Substring(0, n - 1) + "…";
+
+static int RunAssets(CliOptions o)
+{
+    using var store = new ScanHistoryStore(ScanHistoryStore.DefaultPath);
+    var now = DateTimeOffset.UtcNow;
+    switch (o.Sub)
+    {
+        case "approve":
+        case "unapprove":
+        {
+            bool approve = o.Sub == "approve";
+            IEnumerable<string> ips = o.All
+                ? store.GetInventory().Where(h => h.LastAlive).Select(h => h.Ip)
+                : o.Args;
+            int n = store.SetApproved(ips, approve, now);
+            Console.Error.WriteLine($"info: {n} host(s) {(approve ? "approved" : "unapproved")}");
+            return 0;
+        }
+        case "set":
+        {
+            if (o.Args.Count == 0) { Console.Error.WriteLine("error: assets set <ip> --owner X --tags a,b --note N"); return 2; }
+            store.SetHostMeta(o.Args[0], o.Owner, o.Tags, o.Note);
+            return 0;
+        }
+        default:
+        {
+            var rows = store.GetInventory();
+            if (o.Output == OutputFormat.Json)
+            {
+                Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(rows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            Console.Out.WriteLine($"{"IP",-16} {"Appr",-4} {"Alive",-5} {"Risk",4} {"Owner",-14} {"Tags",-16} {"MAC",-18} {"Approved MAC",-18} Name");
+            foreach (var r in rows)
+                Console.Out.WriteLine($"{r.Ip,-16} {(r.Approved ? "yes" : "no"),-4} {(r.LastAlive ? "yes" : "no"),-5} {r.RiskScore,4} {Trunc(r.Owner, 14),-14} {Trunc(r.Tags, 16),-16} {r.LastMac,-18} {r.ApprovedMac,-18} {Trunc(r.LastName, 24)}");
+            return 0;
+        }
+    }
+}
+
+static int RunAlerts(CliOptions o)
+{
+    using var store = new ScanHistoryStore(ScanHistoryStore.DefaultPath);
+    switch (o.Sub)
+    {
+        case "ack":
+        case "reopen":
+        case "snooze":
+        {
+            if (o.Args.Count == 0 || !long.TryParse(o.Args[0], out long id)) { Console.Error.WriteLine("error: alerts " + o.Sub + " <id>"); return 2; }
+            AlertState state = o.Sub switch { "ack" => AlertState.Acknowledged, "snooze" => AlertState.Snoozed, _ => AlertState.Open };
+            DateTimeOffset? until = null;
+            if (state == AlertState.Snoozed)
+                until = DateTimeOffset.UtcNow.AddHours(o.Args.Count > 1 && double.TryParse(o.Args[1], out double h) ? h : 24);
+            bool ok = store.SetAlertState(id, state, until, o.Note);
+            Console.Error.WriteLine(ok ? $"info: alert {id} → {state}" : $"error: alert {id} not found");
+            return ok ? 0 : 1;
+        }
+        default:
+        {
+            var rows = store.ListAlerts(includeResolved: o.All);
+            if (o.Output == OutputFormat.Json)
+            {
+                Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(rows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            Console.Out.WriteLine($"{"Id",5} {"State",-12} {"Type",-20} {"IP",-16} {"First",-17} {"Last",-17} {"N",3}  Detail");
+            foreach (var a in rows)
+                Console.Out.WriteLine($"{a.Id,5} {a.State,-12} {a.Type,-20} {a.Ip,-16} {a.FirstSeen.LocalDateTime,-17:yyyy-MM-dd HH:mm} {a.LastSeen.LocalDateTime,-17:yyyy-MM-dd HH:mm} {a.Count,3}  {Trunc(a.Detail, 40)}");
+            return 0;
+        }
+    }
+}
+
+static int RunSettings(CliOptions o)
+{
+    if (o.Args.Count == 0) { Console.Error.WriteLine("error: settings export <file> | import <file>"); return 2; }
+    try
+    {
+        if (o.Sub == "export") { AppSettingsStore.Export(o.Args[0]); Console.Error.WriteLine("info: exported to " + o.Args[0]); return 0; }
+        if (o.Sub == "import") { AppSettingsStore.Import(o.Args[0]); Console.Error.WriteLine("info: imported " + o.Args[0]); return 0; }
+    }
+    catch (Exception ex) { Console.Error.WriteLine("error: " + ex.Message); return 1; }
+    Console.Error.WriteLine("error: settings export <file> | import <file>");
+    return 2;
+}
+
+static int RunDiag(CliOptions o)
+{
+    try
+    {
+        using var store = File.Exists(ScanHistoryStore.DefaultPath) ? new ScanHistoryStore(ScanHistoryStore.DefaultPath) : null;
+        string zip = NetworkScanner.Support.DiagnosticBundle.Create(o.Sub.Length > 0 ? o.Sub : null, history: store);
+        Console.Out.WriteLine(zip);
+        return 0;
+    }
+    catch (Exception ex) { Console.Error.WriteLine("error: " + ex.Message); return 1; }
+}
