@@ -231,6 +231,13 @@ namespace NetworkScanner
             ["settings.maxtargets"] = ("Max addresses", "최대 주소 수"),
             ["settings.history"] = ("History", "이력"),
             ["settings.outbox"] = ("Pending uploads", "대기 중 업로드"),
+            ["settings.riskallow"] = ("Risky-port exceptions", "위험 포트 예외"),
+            ["settings.riskallow.hint"] = ("e.g. 8080, 10.0.0.5:31337, 10.0.1.0/24:12345", "예: 8080, 10.0.0.5:31337, 10.0.1.0/24:12345"),
+            ["settings.invalid.riskallow"] = ("Invalid risky-port exception entries: {0}", "위험 포트 예외 항목이 잘못되었습니다: {0}"),
+            ["notice.title"] = ("Before you scan", "스캔하기 전에"),
+            ["notice.body"] = ("Only scan networks you own or are explicitly authorized to scan. Port scanning other people's systems may be illegal in your jurisdiction. Scan results and uploaded reports may contain sensitive inventory data - protect them accordingly.",
+                               "본인이 소유했거나 명시적으로 허가받은 네트워크만 스캔하세요. 타인의 시스템을 포트 스캔하는 것은 법적 문제가 될 수 있습니다. 스캔 결과와 업로드된 리포트에는 민감한 자산 정보가 포함될 수 있으니 적절히 보호하세요."),
+            ["notice.accept"] = ("I understand", "확인했습니다"),
             ["app.crash"] = ("An unexpected error occurred. Details were written to the log folder:", "예기치 않은 오류가 발생했습니다. 자세한 내용은 로그 폴더에 기록되었습니다:"),
 
             // 참조 포트 정보 화면

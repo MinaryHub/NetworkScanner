@@ -10,9 +10,9 @@ namespace NetworkScanner
     public class ScanRangeInfo
     {
         public int Index { get; set; }
-        public string StartIP { get; set; }
-        public string EndIP { get; set; }
-        public string Description { get; set; }
+        public string StartIP { get; set; } = "";
+        public string EndIP { get; set; } = "";
+        public string Description { get; set; } = "";
     }
 
     public class ScanRangeList : List<ScanRangeInfo>
@@ -35,10 +35,8 @@ namespace NetworkScanner
 
         public void DelItem(string startIp, string endIp)
         {
-            if (IsExist(startIp, endIp))
-            {
-                this.Remove(this.Where(x => x.StartIP == startIp && x.EndIP == endIp).FirstOrDefault());
-            }
+            ScanRangeInfo? item = this.FirstOrDefault(x => x.StartIP == startIp && x.EndIP == endIp);
+            if (item != null) Remove(item);
         }
 
         public bool IsExist(int index)
@@ -55,10 +53,10 @@ namespace NetworkScanner
             return this.Any(x => x.StartIP == startIp && x.EndIP == endIp);
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
-        public void NotifyPropertyChanged([CallerMemberName] string name = null)
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public void NotifyPropertyChanged([CallerMemberName] string? name = null)
         {
-            if (!String.IsNullOrEmpty(name))
+            if (!string.IsNullOrEmpty(name))
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
             }

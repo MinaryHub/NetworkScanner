@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NetworkScanner.History;
 using NetworkScanner.Network;
 using NetworkScanner.Platform;
@@ -27,10 +28,14 @@ namespace NetworkScanner
         // 서비스 배너를 읽을 만한 대표 포트(열려 있는 첫 포트의 배너를 수집).
         public int[] BannerPorts { get; set; } = { 80, 8080, 443, 22, 21, 25, 23, 3306 };
 
+        // 위험 포트 예외(RiskPolicy 형식). 설정 화면/CLI --allow 에서 온다.
+        public List<string> RiskAllowList { get; set; } = new();
+
         public static ScanOptions FromSettings(AppSettingsData s) => new()
         {
             Parallelism = Math.Clamp(s.ScanParallelism, 1, 512),
             MaxTargets = Math.Max(1, s.MaxTargets),
+            RiskAllowList = RiskPolicy.ParseAllowList(s.RiskAllowList).Valid,
         };
     }
 

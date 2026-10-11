@@ -45,11 +45,17 @@
             </Border>
 
             <Border BorderBrush="Gray" BorderThickness="1" Padding="8">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock FontWeight="Bold" VerticalAlignment="Center" Text="{l:Tr Key=settings.ports}" />
-                    <CheckBox Name="ChkCheckPort" Content="{l:Tr Key=settings.useportcheck}" />
-                    <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=settings.portno}" />
-                    <TextBox Name="TbPortsList" Width="400" Watermark="22/80/8080" />
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock FontWeight="Bold" VerticalAlignment="Center" Text="{l:Tr Key=settings.ports}" />
+                        <CheckBox Name="ChkCheckPort" Content="{l:Tr Key=settings.useportcheck}" />
+                        <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=settings.portno}" />
+                        <TextBox Name="TbPortsList" Width="400" Watermark="22/80/8080" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=settings.riskallow}" />
+                        <TextBox Name="TbRiskAllow" Width="520" Watermark="{l:Tr Key=settings.riskallow.hint}" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

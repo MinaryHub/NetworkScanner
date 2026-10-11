@@ -50,6 +50,12 @@ namespace NetworkScanner
         public int ScanParallelism { get; set; } = 64;
         public int MaxTargets { get; set; } = 65536;
 
+        // 위험 포트 예외 목록("8080, 10.0.0.5:31337, 10.0.1.0/24:12345"). 승인된 정상 서비스는 경고에서 제외한다.
+        public string RiskAllowList { get; set; } = "";
+
+        // 사용 고지(허가된 네트워크만 스캔) 확인 여부. 최초 실행 시 한 번 묻는다.
+        public bool UsageNoticeAccepted { get; set; }
+
         // 알림(변화 감지/위험 포트). 비어 있으면 비활성.
         public NotificationSettings Notifications { get; set; } = new NotificationSettings();
 
@@ -76,6 +82,10 @@ namespace NetworkScanner
                 var ports = ProbeExtensions.ParsePorts(PortList);
                 if (ports.Count == 0) errors.Add(Localization.T("settings.invalid.portlist"));
             }
+
+            var (_, invalidAllow) = RiskPolicy.ParseAllowList(RiskAllowList);
+            if (invalidAllow.Count > 0)
+                errors.Add(string.Format(Localization.T("settings.invalid.riskallow"), string.Join(", ", invalidAllow)));
 
             if (Upload.Enabled)
             {

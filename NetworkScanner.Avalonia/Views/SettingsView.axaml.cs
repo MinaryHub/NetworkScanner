@@ -16,6 +16,10 @@ namespace NetworkScanner.Avalonia.Views
     {
         public ScanRangeList ScanRanges { get; } = new ScanRangeList();
         private readonly CheckBox[] _hourCheckboxes = new CheckBox[24];
+        // 화면에 컨트롤이 없는 설정값은 저장 시 사라지지 않도록 필드로 들고 간다.
+        private bool _usageNoticeAccepted;
+
+        public void MarkUsageNoticeAccepted() => _usageNoticeAccepted = true;
 
         // 화면에 노출되지 않는 값(컬럼 너비 등)을 저장 시 잃지 않도록 마지막으로 읽은 설정을 보관한다.
         private AppSettingsData _loaded = new AppSettingsData();
@@ -89,6 +93,8 @@ namespace NetworkScanner.Avalonia.Views
             TbCurSystemName.Text = data.SystemName;
             TbPortsList.Text = data.PortList;
             ChkCheckPort.IsChecked = data.UsePortChecking;
+            TbRiskAllow.Text = data.RiskAllowList;
+            _usageNoticeAccepted = data.UsageNoticeAccepted;
             ChkLoadLatestFileWhenStartup.IsChecked = data.LoadLatestFileOnStartup;
             ChkContinuousMonitoring.IsChecked = data.ContinuousMonitoring;
             TbMonitorInterval.Text = data.MonitorIntervalMinutes.ToString();
@@ -134,6 +140,8 @@ namespace NetworkScanner.Avalonia.Views
                 SystemName = TbCurSystemName.Text ?? "",
                 PortList = TbPortsList.Text ?? "",
                 UsePortChecking = ChkCheckPort.IsChecked == true,
+                RiskAllowList = TbRiskAllow.Text ?? "",
+                UsageNoticeAccepted = _usageNoticeAccepted,
                 LoadLatestFileOnStartup = ChkLoadLatestFileWhenStartup.IsChecked == true,
                 ContinuousMonitoring = ChkContinuousMonitoring.IsChecked == true,
                 MonitorIntervalMinutes = int.TryParse(TbMonitorInterval.Text, out int m) ? m : -1,

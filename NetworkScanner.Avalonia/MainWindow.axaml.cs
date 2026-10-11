@@ -74,6 +74,24 @@ public partial class MainWindow : Window, IScanConfigProvider
 
         _ = CheckForUpdatesAsync();
         _ = FlushOutboxAsync();
+        if (!startup.UsageNoticeAccepted) _ = ShowUsageNoticeAsync();
+    }
+
+    // 최초 실행 시 "허가된 네트워크만 스캔" 고지를 한 번 보여주고 확인 여부를 저장한다.
+    private async Task ShowUsageNoticeAsync()
+    {
+        try
+        {
+            await Helpers.SimpleDialogs.ShowMessageAsync(this, Localization.T("notice.body"), Localization.T("notice.title"));
+            _settingsView.MarkUsageNoticeAccepted();
+            AppSettingsData data = AppSettingsStore.LoadSettings();
+            data.UsageNoticeAccepted = true;
+            AppSettingsStore.SaveSettings(data);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.LogError("NetworkScanner", "usage notice failed: " + ex.Message);
+        }
     }
 
     // 변화 감지 시 설정된 알림 채널(웹훅/syslog/메일)로 보낸다. 실패해도 스캔/UI에는 영향을 주지 않는다.

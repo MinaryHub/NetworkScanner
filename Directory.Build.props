@@ -1,0 +1,8 @@
+<Project>
+  <!-- 모든 프로젝트 공통 품질 설정: 경고(널 가능성 포함)를 오류로 취급해 CI에서 걸러낸다. -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+</Project>

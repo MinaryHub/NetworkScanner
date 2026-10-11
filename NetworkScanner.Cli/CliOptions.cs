@@ -28,6 +28,7 @@ internal sealed class CliOptions
     public bool Notify { get; private set; }
     public bool Scheduled { get; private set; }
     public int Parallelism { get; private set; }
+    public List<string> Allow { get; } = new();
     public bool ShowHelp { get; private set; }
     public string? Error { get; private set; }
 
@@ -137,6 +138,16 @@ internal sealed class CliOptions
                     break;
                 }
 
+                case "--allow":
+                {
+                    string? v = Next();
+                    if (v == null) return o.Fail("--allow requires a value (port | ip:port | ip | cidr:port)");
+                    var (valid, invalid) = RiskPolicy.ParseAllowList(v);
+                    if (invalid.Count > 0) return o.Fail("invalid --allow entries: " + string.Join(", ", invalid));
+                    o.Allow.AddRange(valid);
+                    break;
+                }
+
                 case "--use-settings":
                     o.UseSettings = true;
                     break;
@@ -230,6 +241,7 @@ SCAN OPTIONS:
   --scheduled                   Behave like a scheduled scan: save CSV + HTML report to the
                                 user data folder (and upload when --upload)
   --parallelism <1-512>         Hosts scanned concurrently (default: 64 or saved setting)
+  --allow <list>                Risky-port exceptions: port | ip:port | ip | cidr:port (repeatable)
   -o, --output <table|json|csv|html>  Output format (default: table)
   --out <file>                  Write output to a file instead of stdout
   --system-name <name>          System name recorded with results (default: saved or hostname)

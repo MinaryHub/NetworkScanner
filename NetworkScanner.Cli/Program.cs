@@ -82,6 +82,7 @@ var items = new IPInfoList();
 var services = ScanServices.CreateDefault(withHistory: !options.NoHistory);
 var engineOptions = saved != null ? ScanOptions.FromSettings(saved) : new ScanOptions();
 if (options.Parallelism > 0) engineOptions.Parallelism = options.Parallelism;
+engineOptions.RiskAllowList.AddRange(options.Allow);
 var engine = new ScanEngine(items, oui, config, services, engineOptions);
 
 bool quiet = options.Quiet || Console.IsErrorRedirected;

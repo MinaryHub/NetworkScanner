@@ -378,12 +378,13 @@ namespace NetworkScanner
             }
             catch (OperationCanceledException) { }
 
-            string openPorts = ProbeExtensions.FormatPorts(open.OrderBy(p => p));
-            HashSet<int> prohibited = GetProhibitedPortSet();
+            List<int> sorted = open.OrderBy(p => p).ToList();
+            string openPorts = ProbeExtensions.FormatPorts(sorted);
+            RiskPolicy policy = BuildRiskPolicy();
             lock (_itemsLock)
             {
                 ipInfo.Ports = openPorts;
-                ipInfo.HasProhibitedPort = ContainsProhibitedPort(openPorts, prohibited);
+                ipInfo.HasProhibitedPort = policy.HasRiskyPort(ip, sorted);
             }
             ItemsRefreshNeeded?.Invoke();
             ProgressChanged?.Invoke(0);
@@ -418,7 +419,7 @@ namespace NetworkScanner
 
             // 스캔 중에는 설정을 다시 읽지 않는다(UI 스레드 마샬링을 피하고 일관된 설정으로 끝까지 돈다).
             bool usePortChecking = Config.GetUsePortChecking() == true;
-            HashSet<int> prohibitedPorts = GetProhibitedPortSet();
+            RiskPolicy policy = BuildRiskPolicy();
             List<int> userPorts = _userPorts.Count > 0 ? _userPorts : ProbeExtensions.ParsePorts(Config.GetPortList());
             var options = new ParallelOptions { MaxDegreeOfParallelism = Options.Parallelism, CancellationToken = token };
 
@@ -479,7 +480,7 @@ namespace NetworkScanner
                 {
                     await Parallel.ForEachAsync(aliveList, options, async (strIp, ct) =>
                     {
-                        await EnrichHostAsync(strIp, usePortChecking, userPorts, prohibitedPorts, ct).ConfigureAwait(false);
+                        await EnrichHostAsync(strIp, usePortChecking, userPorts, policy, ct).ConfigureAwait(false);
 
                         int cur = Interlocked.Increment(ref enriched);
                         ProgressChanged?.Invoke(cur);
@@ -593,11 +594,12 @@ namespace NetworkScanner
             return targets;
         }
 
-        private HashSet<int> GetProhibitedPortSet()
+        // 금지 포트 목록 + 설정의 예외 목록으로 위험 판정 정책을 만든다.
+        private RiskPolicy BuildRiskPolicy()
         {
             List<RefPortInfo>? prohibitList = Config.GetProhibitPortList();
-            if (prohibitList == null) return new HashSet<int>();
-            return new HashSet<int>(prohibitList.Select(p => p.PortNo));
+            IEnumerable<int> prohibited = prohibitList?.Select(p => p.PortNo) ?? Enumerable.Empty<int>();
+            return new RiskPolicy(prohibited, Options.RiskAllowList);
         }
 
         public static int ComputeIPCount(ScanRangeList ranges)
@@ -663,7 +665,7 @@ namespace NetworkScanner
 
         // 2단계 전용: 살아있는 호스트 한 대의 MAC/제조사/호스트명/열린 포트/배너를 조회해 해당 행을 채운다.
         // 모든 조회는 결과 목록 락 밖에서 수행하고, 마지막에 짧게 락을 잡아 값만 반영한다.
-        private async Task EnrichHostAsync(string targetIp, bool usePortChecking, List<int> userPorts, HashSet<int> prohibitedPorts, CancellationToken ct)
+        private async Task EnrichHostAsync(string targetIp, bool usePortChecking, List<int> userPorts, RiskPolicy policy, CancellationToken ct)
         {
             string? mac = _services.Arp.Resolve(targetIp);
             string vendor = string.IsNullOrEmpty(mac) ? "" : _oui.GetVender(mac);
@@ -675,7 +677,7 @@ namespace NetworkScanner
             string? hostName = await hostNameTask.ConfigureAwait(false);
 
             string openPorts = ProbeExtensions.FormatPorts(open);
-            bool hasProhibited = open.Any(prohibitedPorts.Contains);
+            bool hasProhibited = policy.HasRiskyPort(targetIp, open);
             string service = usePortChecking ? await GrabServiceAsync(targetIp, open, ct).ConfigureAwait(false) : "";
 
             bool changed = false;
@@ -710,13 +712,6 @@ namespace NetworkScanner
                 if (!string.IsNullOrEmpty(banner)) return banner;
             }
             return "";
-        }
-
-        // 열린 포트 중 위험(백도어) 포트 목록과 일치하는 것이 있는지 확인한다.
-        private static bool ContainsProhibitedPort(string portsField, HashSet<int> prohibitedPorts)
-        {
-            if (string.IsNullOrEmpty(portsField) || prohibitedPorts.Count == 0) return false;
-            return ProbeExtensions.ParsePorts(portsField).Any(prohibitedPorts.Contains);
         }
 
         private void RaiseResultsSummary()
