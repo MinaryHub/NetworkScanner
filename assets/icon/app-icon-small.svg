@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 256 256">
+  <!-- 32px 이하용 단순화 글리프: 바깥 호와 노드 테두리를 생략하고 선을 굵게 해 작은 크기에서도 형태가 남게 한다. fill만 사용. -->
+  <rect x="8" y="8" width="240" height="240" rx="60" fill="#0F1B2D"/>
+  <path fill="#2DD4BF" d="M128,32 A96,96 0 0 1 224,128 L200,128 A72,72 0 0 0 128,56 Z"/>
+  <circle cx="128" cy="44" r="12" fill="#2DD4BF"/>
+  <circle cx="212" cy="128" r="12" fill="#2DD4BF"/>
+  <circle cx="128" cy="128" r="36" fill="#2DD4BF"/>
+  <circle cx="190" cy="66" r="20" fill="#2DD4BF"/>
+</svg>

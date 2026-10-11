@@ -47,6 +47,7 @@
   <ItemGroup>
     <!-- 아이콘 이미지는 저장소 루트의 assets/ 에서 임베드한다. -->
     <AvaloniaResource Include="..\assets\app.ico" Link="Assets/app.ico" />
+    <AvaloniaResource Include="..\assets\logo.png" Link="Assets/logo.png" />
     <AvaloniaResource Include="..\assets\iplist.png" Link="Assets/iplist.png" />
     <AvaloniaResource Include="..\assets\settings.png" Link="Assets/settings.png" />
     <AvaloniaResource Include="..\assets\info.png" Link="Assets/info.png" />

@@ -16,7 +16,7 @@ NetworkScanner bundles or depends on the following third-party components.
 | [Microsoft.Extensions.Hosting](https://github.com/dotnet/runtime) (+ WindowsServices, Systemd) | MIT | Headless scheduler service |
 | [System.Security.Cryptography.ProtectedData](https://github.com/dotnet/runtime) | MIT | Windows DPAPI secret store |
 | [IEEE OUI registry](https://standards-oui.ieee.org/) (`data/ouiinfo.ini`) | IEEE public data | MAC vendor lookup |
-| Icons in `assets/` | See original authors (Kyo-Tux "Delikate" icon set and others) | Toolbar / app icon |
+| Toolbar icons in `assets/` | See original authors (Kyo-Tux "Delikate" icon set and others) | Toolbar images (the app icon itself is original, `assets/icon/`) |
 | [xUnit](https://github.com/xunit/xunit), [coverlet](https://github.com/coverlet-coverage/coverlet) | Apache-2.0 / MIT | Tests only |
 
 Full license texts are available from each project's repository.

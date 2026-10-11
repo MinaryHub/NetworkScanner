@@ -18,9 +18,7 @@
         <Border Grid.Column="0" Background="{StaticResource NavyBrush}">
             <Grid RowDefinitions="Auto,*,Auto" Margin="12,16">
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="10,2,10,18">
-                    <Border Width="28" Height="28" CornerRadius="7" Background="{StaticResource TealBrush}">
-                        <Image Source="avares://NetworkScanner.Avalonia/Assets/app.ico" Width="18" Height="18" />
-                    </Border>
+                    <Image Source="avares://NetworkScanner.Avalonia/Assets/logo.png" Width="28" Height="28" />
                     <TextBlock FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center">NetworkScanner</TextBlock>
                 </StackPanel>
 

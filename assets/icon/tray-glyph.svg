@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 256 256">
+  <!-- 메뉴바/트레이용 단색 글리프(#14202B). 배경 없음, fill만 사용. -->
+  <path fill="#14202B" d="M128,31 A97,97 0 0 1 225,128 L199,128 A71,71 0 0 0 128,57 Z"/>
+  <circle cx="128" cy="44" r="13" fill="#14202B"/>
+  <circle cx="212" cy="128" r="13" fill="#14202B"/>
+  <path fill="#14202B" fill-opacity="0.45" fill-rule="evenodd" d="M128,25 a103,103 0 1,0 0.01,0 Z M128,39 a89,89 0 1,1 -0.01,0 Z"/>
+  <circle cx="128" cy="128" r="36" fill="#14202B"/>
+</svg>

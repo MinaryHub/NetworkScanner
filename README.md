@@ -51,7 +51,7 @@ The `*.nupkg`, `RELEASES*`, `assets.*.json` and `releases.*.json` files are Velo
 | `NetworkScanner.Service/` | `netscan-service` headless scheduler (Microsoft.Extensions.Hosting worker) |
 | `NetworkScanner.Tests/` | xUnit tests for Core (run on every OS, no real network needed) |
 | `data/` | Bundled reference data: `ouiinfo.ini` (IEEE OUI registry), `reservedports.ini`, `prohibitports.ini` |
-| `assets/` | App icon and toolbar images |
+| `assets/` | App icon (`icon/*.svg` masters → `app.ico` / `app.icns` / `app.png` via `tools/build-icons.sh`), bundled fonts and toolbar images |
 | `deploy/` | systemd unit, launchd plist, Windows service installer script, Dockerfile |
 | `tools/update-oui.sh` | Refreshes `data/ouiinfo.ini` from IEEE |
 

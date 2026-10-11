@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256">
+  <!-- NetworkScanner 앱 아이콘 "펄스": 중심 노드에서 퍼지는 두 겹의 호와, 호 위에서 잡힌 장비 한 점.
+       Harbor Navy 바탕 + Harbor Teal 액센트(UI 테마와 동일). 64px 이상에서 사용.
+       모든 형태는 fill만 쓴다(stroke를 빼먹는 래스터라이저가 있어 선은 고리/부채꼴 도형으로 그렸다). -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#0F1B2D"/>
+  <!-- 바탕 고리 두 개(r=92, r=58, 두께 10) -->
+  <path fill="#1E3A52" fill-rule="evenodd" d="M128,31 a97,97 0 1,0 0.01,0 Z M128,41 a87,87 0 1,1 -0.01,0 Z"/>
+  <path fill="#1E3A52" fill-rule="evenodd" d="M128,65 a63,63 0 1,0 0.01,0 Z M128,75 a53,53 0 1,1 -0.01,0 Z"/>
+  <!-- 틸 호(위→오른쪽 사분면, 두께 12, 둥근 끝) -->
+  <path fill="#2DD4BF" d="M128,30 A98,98 0 0 1 226,128 L214,128 A86,86 0 0 0 128,42 Z"/>
+  <circle cx="128" cy="36" r="6" fill="#2DD4BF"/>
+  <circle cx="220" cy="128" r="6" fill="#2DD4BF"/>
+  <path fill="#2DD4BF" d="M128,64 A64,64 0 0 1 192,128 L180,128 A52,52 0 0 0 128,76 Z"/>
+  <circle cx="128" cy="70" r="6" fill="#2DD4BF"/>
+  <circle cx="186" cy="128" r="6" fill="#2DD4BF"/>
+  <!-- 중심 노드(테두리 틸, 속 진한 틸) -->
+  <circle cx="128" cy="128" r="25" fill="#2DD4BF"/>
+  <circle cx="128" cy="128" r="19" fill="#0F766E"/>
+  <!-- 호 위에서 잡힌 장비 -->
+  <circle cx="186" cy="70" r="13" fill="#2DD4BF"/>
+</svg>

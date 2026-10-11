@@ -64,22 +64,22 @@ jobs:
             rid: osx-arm64
             channel: osx
             mainExe: NetworkScanner.Avalonia
-            icon: ""
+            icon: assets/app.icns
           - os: macos-13
             rid: osx-x64
             channel: osx-x64
             mainExe: NetworkScanner.Avalonia
-            icon: ""
+            icon: assets/app.icns
           - os: ubuntu-latest
             rid: linux-x64
             channel: linux
             mainExe: NetworkScanner.Avalonia
-            icon: ""
+            icon: assets/app.png
           - os: ubuntu-24.04-arm
             rid: linux-arm64
             channel: linux-arm64
             mainExe: NetworkScanner.Avalonia
-            icon: ""
+            icon: assets/app.png
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

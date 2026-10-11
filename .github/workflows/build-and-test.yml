@@ -74,11 +74,11 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
             mainExe: NetworkScanner.Avalonia
-            icon: ""
+            icon: assets/app.icns
           - os: ubuntu-latest
             rid: linux-x64
             mainExe: NetworkScanner.Avalonia
-            icon: ""
+            icon: assets/app.png
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
