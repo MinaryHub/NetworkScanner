@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>netscan</AssemblyName>
     <RootNamespace>NetworkScanner.Cli</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <!-- 개발 머신에 .NET 8 런타임이 없어도(예: .NET 9만 설치) 로컬 실행이 가능하도록 허용. -->
+    <!-- 개발 머신에 .NET 10 런타임이 없어도(더 새 버전만 설치된 경우) 로컬 실행이 가능하도록 허용. -->
     <RollForward>LatestMajor</RollForward>
     <Version>1.7.5</Version>
   </PropertyGroup>
@@ -18,14 +18,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- GUI 앱과 동일한 참조 데이터 파일을 실행 파일 옆에 복사한다(중복 보관하지 않고 링크). -->
-    <None Include="..\NetworkScanner\ouiinfo.ini" Link="ouiinfo.ini">
+    <!-- 참조 데이터 파일은 저장소 루트의 data/ 에 한 벌만 두고, GUI/CLI가 링크로 실행 파일 옆에 복사한다. -->
+    <None Include="..\data\ouiinfo.ini" Link="ouiinfo.ini">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="..\NetworkScanner\prohibitports.ini" Link="prohibitports.ini">
+    <None Include="..\data\prohibitports.ini" Link="prohibitports.ini">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="..\NetworkScanner\reservedports.ini" Link="reservedports.ini">
+    <None Include="..\data\reservedports.ini" Link="reservedports.ini">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

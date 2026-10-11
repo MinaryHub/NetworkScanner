@@ -59,6 +59,13 @@ namespace NetworkScanner
                     changes.Add(new ScanChange(ScanChangeType.ProhibitedPort, ip, cur.Ports));
             }
 
+            // 기준선에는 살아있었는데 이번 결과에 아예 없는 호스트(재시작 후 이력 DB를 기준선으로 쓴 경우 등)도 오프라인으로 본다.
+            foreach (var kv in baseline)
+            {
+                if (kv.Value.Alive && !current.ContainsKey(kv.Key))
+                    changes.Add(new ScanChange(ScanChangeType.HostOffline, kv.Key, Localization.T("change.noresponse")));
+            }
+
             return changes;
         }
 

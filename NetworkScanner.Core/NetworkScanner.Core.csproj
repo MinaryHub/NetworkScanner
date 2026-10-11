@@ -1,20 +1,19 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- FTPService의 EUC-KR 인코딩(코드페이지 51949)에 필요. WPF(Windows Desktop) 런타임에서는
-         암시적으로 제공되지만, 순수 net8.0 라이브러리에서는 명시적 참조가 필요하다. -->
-    <PackageReference Include="FluentFTP" Version="54.2.0" />
-    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
-    <!-- AppLogger의 Windows 이벤트 로그 지원(런타임에는 OperatingSystem.IsWindows()로만 사용)에 필요 -->
-    <PackageReference Include="System.Diagnostics.EventLog" Version="8.0.0" />
-    <!-- CredentialProtector의 Windows DPAPI 지원(런타임에는 OperatingSystem.IsWindows()로만 사용)에 필요 -->
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <!-- 결과 업로드: FTPS(FluentFTP), SFTP(SSH.NET). HTTPS는 HttpClient로 처리한다. -->
+    <PackageReference Include="FluentFTP" Version="55.0.0" />
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <!-- Secrets/WindowsDpapiSecretStore의 Windows DPAPI 지원(런타임에는 OperatingSystem.IsWindows()로만 사용)에 필요 -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <!-- ScanHistoryStore의 SQLite 스캔 이력 저장(history.db)에 필요 -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
   </ItemGroup>
 
 </Project>

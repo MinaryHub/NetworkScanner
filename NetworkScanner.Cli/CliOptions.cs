@@ -2,25 +2,59 @@ using NetworkScanner;
 
 namespace NetworkScanner.Cli;
 
-internal enum OutputFormat { Table, Json, Csv }
+internal enum OutputFormat { Table, Json, Csv, Html }
+internal enum CliCommand { Scan, History }
 
 // 명령행 옵션 파서. 최소한의 GNU 스타일 --옵션만 다룬다.
 internal sealed class CliOptions
 {
+    public CliCommand Command { get; private set; } = CliCommand.Scan;
+    public string HistorySub { get; private set; } = "scans";   // scans|inventory|host|prune
+    public string? HistoryArg { get; private set; }
+    public int HistoryLimit { get; private set; } = 50;
+
     public List<ScanRangeInfo> Ranges { get; } = new();
     public string Ports { get; private set; } = "";      // "22/80/443" 형식(내부), 미지정 시 ""
+    public bool PortsSet { get; private set; }
     public OutputFormat Output { get; private set; } = OutputFormat.Table;
     public string? OutFile { get; private set; }
     public string? SystemName { get; private set; }
     public string Language { get; private set; } = Localization.English;
+    public bool LanguageSet { get; private set; }
     public bool Quiet { get; private set; }
+    public bool NoHistory { get; private set; }
+    public bool UseSettings { get; private set; }
+    public bool Upload { get; private set; }
+    public bool Notify { get; private set; }
+    public bool Scheduled { get; private set; }
+    public int Parallelism { get; private set; }
     public bool ShowHelp { get; private set; }
     public string? Error { get; private set; }
 
     public static CliOptions Parse(string[] args)
     {
         var o = new CliOptions();
-        for (int i = 0; i < args.Length; i++)
+        int start = 0;
+        if (args.Length > 0 && args[0] == "history")
+        {
+            o.Command = CliCommand.History;
+            start = 1;
+            if (args.Length > 1 && !args[1].StartsWith('-'))
+            {
+                o.HistorySub = args[1];
+                start = 2;
+                if (o.HistorySub is "host" or "prune")
+                {
+                    if (args.Length > 2 && !args[2].StartsWith('-')) { o.HistoryArg = args[2]; start = 3; }
+                }
+                else if (o.HistorySub is not ("scans" or "inventory"))
+                {
+                    return o.Fail($"unknown history subcommand: {o.HistorySub} (scans|inventory|host <ip>|prune <days>)");
+                }
+            }
+        }
+
+        for (int i = start; i < args.Length; i++)
         {
             string a = args[i];
             string? Next() => i + 1 < args.Length ? args[++i] : null;
@@ -49,6 +83,7 @@ internal sealed class CliOptions
                     var nums = v.Split(new[] { ',', '/', ' ' }, StringSplitOptions.RemoveEmptyEntries)
                                 .Where(t => int.TryParse(t, out _));
                     o.Ports = string.Join("/", nums);
+                    o.PortsSet = true;
                     break;
                 }
 
@@ -61,9 +96,10 @@ internal sealed class CliOptions
                         "table" => OutputFormat.Table,
                         "json" => OutputFormat.Json,
                         "csv" => OutputFormat.Csv,
+                        "html" => OutputFormat.Html,
                         _ => OutputFormat.Table,
                     };
-                    if (v is not ("table" or "json" or "csv")) return o.Fail($"invalid --output: {v} (table|json|csv)");
+                    if (v is not ("table" or "json" or "csv" or "html")) return o.Fail($"invalid --output: {v} (table|json|csv|html)");
                     break;
                 }
 
@@ -83,12 +119,49 @@ internal sealed class CliOptions
                     string? v = Next()?.ToLowerInvariant();
                     if (v is not ("en" or "ko")) return o.Fail("--lang must be 'en' or 'ko'");
                     o.Language = v!;
+                    o.LanguageSet = true;
                     break;
                 }
+
+                case "--limit":
+                {
+                    if (!int.TryParse(Next(), out int n) || n <= 0) return o.Fail("--limit requires a positive number");
+                    o.HistoryLimit = n;
+                    break;
+                }
+
+                case "--parallelism":
+                {
+                    if (!int.TryParse(Next(), out int n) || n <= 0 || n > 512) return o.Fail("--parallelism must be 1-512");
+                    o.Parallelism = n;
+                    break;
+                }
+
+                case "--use-settings":
+                    o.UseSettings = true;
+                    break;
+
+                case "--upload":
+                    o.Upload = true;
+                    o.UseSettings = true;
+                    break;
+
+                case "--notify":
+                    o.Notify = true;
+                    o.UseSettings = true;
+                    break;
+
+                case "--scheduled":
+                    o.Scheduled = true;
+                    break;
 
                 case "--quiet":
                 case "-q":
                     o.Quiet = true;
+                    break;
+
+                case "--no-history":
+                    o.NoHistory = true;
                     break;
 
                 default:
@@ -140,30 +213,44 @@ internal sealed class CliOptions
 @"netscan - NetworkScanner command-line interface
 
 USAGE:
-  netscan [options]
+  netscan [options]                          scan
+  netscan history [scans|inventory|host <ip>|prune <days>] [--limit N] [-o json]
 
-OPTIONS:
+SCAN OPTIONS:
   --range <CIDR|start-end|ip>   Range to scan (repeatable). Examples:
                                   --range 192.168.1.0/24
                                   --range 10.0.0.1-10.0.0.50
-                                If omitted, the local subnet is auto-detected.
+                                If omitted, saved settings (--use-settings) or the
+                                local subnet are used.
   --ports <list>                Ports to scan, e.g. --ports 22,80,443
                                 (omit to skip port scanning)
-  -o, --output <table|json|csv> Output format (default: table)
+  --use-settings                Use the GUI's settings.json (ranges, ports, limits, language)
+  --upload                      Upload results using the saved upload settings (implies --use-settings)
+  --notify                      Send change notifications using the saved settings (implies --use-settings)
+  --scheduled                   Behave like a scheduled scan: save CSV + HTML report to the
+                                user data folder (and upload when --upload)
+  --parallelism <1-512>         Hosts scanned concurrently (default: 64 or saved setting)
+  -o, --output <table|json|csv|html>  Output format (default: table)
   --out <file>                  Write output to a file instead of stdout
-  --system-name <name>          System name recorded with results (default: hostname)
+  --system-name <name>          System name recorded with results (default: saved or hostname)
   --lang <en|ko>                Language for messages/labels (default: en)
+  --no-history                  Do not record this scan in the local history database
   -q, --quiet                   Suppress progress messages on stderr
   -h, --help                    Show this help
+
+EXIT CODES:
+  0 ok, 1 scan error, 2 bad arguments, 3 ok but risky (backdoor) ports were found
 
 NOTES:
   Progress is written to stderr; final results to stdout (safe to pipe).
   Reserved/backdoor port matching and vendor/OS/service detection are
-  always applied to discovered hosts.
+  always applied to discovered hosts. Every scan is recorded in history.db
+  under the user data folder unless --no-history is given.
 
 EXAMPLES:
   netscan --range 192.168.1.0/24 --ports 22,80,443
-  netscan --range 10.0.0.0/24 -o json --out scan.json
-  netscan            # scan the local subnet, table output");
+  netscan --use-settings --scheduled --upload --notify -q     # cron/service style run
+  netscan history inventory
+  netscan history host 192.168.1.10 -o json");
     }
 }

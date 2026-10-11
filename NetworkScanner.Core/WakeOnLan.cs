@@ -26,7 +26,7 @@ namespace NetworkScanner
             byte[]? packet = BuildMagicPacket(mac);
             if (packet == null)
             {
-                OnError?.Invoke("MAC 주소 형식이 올바르지 않습니다: " + mac);
+                OnError?.Invoke(string.Format(Localization.T("wol.invalidmac"), mac));
                 return false;
             }
 
@@ -39,7 +39,7 @@ namespace NetworkScanner
             }
             catch (Exception ex)
             {
-                OnError?.Invoke("Wake-on-LAN 전송 실패: " + ex.Message);
+                OnError?.Invoke(string.Format(Localization.T("wol.sendfailed"), ex.Message));
                 return false;
             }
         }

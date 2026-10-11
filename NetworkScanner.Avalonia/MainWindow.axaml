@@ -39,6 +39,13 @@
                             <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=nav.portinfo}" />
                         </StackPanel>
                     </Button>
+                    <Button Name="BtnHistory" Click="BtnHistory_Click" HorizontalAlignment="Stretch"
+                            Background="{StaticResource SideBackgroundBrush}" BorderBrush="Transparent" BorderThickness="3,0,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/iplist.png" Width="24" Height="24" />
+                            <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=nav.history}" />
+                        </StackPanel>
+                    </Button>
                     <Button Name="BtnGuide" Click="BtnGuide_Click" HorizontalAlignment="Stretch"
                             Background="{StaticResource SideBackgroundBrush}" BorderBrush="Transparent" BorderThickness="3,0,0,0">
                         <StackPanel Orientation="Horizontal" Spacing="8">
@@ -55,6 +62,9 @@
                         <TextBlock Name="TbUpdate" TextAlignment="Center" TextWrapping="Wrap"
                                    Text="{l:Tr Key=update.button}" />
                     </Button>
+                    <!-- 전송에 실패해 outbox에 밀린 업로드 건수(0이면 숨김). -->
+                    <TextBlock Name="TbOutbox" Foreground="#FFF3A53E" TextAlignment="Center" TextWrapping="Wrap"
+                               Margin="8,0" FontSize="11" IsVisible="False" />
                     <TextBlock Name="TbVersion" Foreground="White" TextAlignment="Center">version</TextBlock>
                 </StackPanel>
             </Grid>

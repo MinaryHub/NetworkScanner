@@ -1,5 +1,5 @@
-using System.Net;
 using NetworkScanner;
+using NetworkScanner.Upload;
 
 namespace NetworkScanner.Cli;
 
@@ -15,11 +15,8 @@ internal sealed class CliConfig : IScanConfigProvider
     public required List<RefPortInfo> Prohibited { get; init; }
 
     public string GetPortList() => PortList;
-    public IPAddress GetFTPIP() => IPAddress.None;
-    public string GetFTPID() => "";
-    public string GetFTPPW() => "";
-    public int GetFTPPort() => 0;
-    public bool? GetUseFTP() => false;
+    public UploadSettings Upload { get; init; } = new UploadSettings();
+    public UploadSettings GetUploadSettings() => Upload;
     public string GetSystemName() => SystemName;
     public bool? GetUsePortChecking() => UsePorts;
     public List<RefPortInfo> GetReservedPortList() => Reserved;

@@ -22,6 +22,12 @@ namespace NetworkScanner.Avalonia.Views
 
         public IScanConfigProvider? Config { get; set; }
 
+        // 엔진 이벤트를 UI 스레드에서 다시 내보낸다. MainWindow가 알림 전송/outbox 갱신에 쓴다.
+        public event Action<IReadOnlyList<ScanChange>>? ChangesDetected;
+        public event Action? ScanFinished;
+
+        public ScanServices? Services => _engine?.Services;
+
         public IPListView()
         {
             InitializeComponent();
@@ -32,10 +38,10 @@ namespace NetworkScanner.Avalonia.Views
             RefreshGrid();
         }
 
-        public void Initialize(IScanConfigProvider config)
+        public void Initialize(IScanConfigProvider config, ScanServices? services = null, ScanOptions? options = null)
         {
             Config = config;
-            _engine = new ScanEngine(_items, _oui, Config);
+            _engine = new ScanEngine(_items, _oui, Config, services, options);
             _engine.Message += msg => Dispatcher.UIThread.Post(() => TbMsg.Text = msg);
             _engine.ProgressMaxChanged += max => Dispatcher.UIThread.Post(() =>
             {
@@ -57,8 +63,13 @@ namespace NetworkScanner.Avalonia.Views
                 SetScanningState(false);
                 RefreshGrid();
                 TbProgressPercent.Text = "";
+                ScanFinished?.Invoke();
             });
-            _engine.ScanChangesDetected += changes => Dispatcher.UIThread.Post(() => ReportChanges(changes));
+            _engine.ScanChangesDetected += changes => Dispatcher.UIThread.Post(() =>
+            {
+                ReportChanges(changes);
+                ChangesDetected?.Invoke(changes);
+            });
 
             _engine.InitFromConfig();
         }
@@ -162,6 +173,12 @@ namespace NetworkScanner.Avalonia.Views
         {
             _engine?.LoadIPInfo(filename);
             RefreshGrid();
+        }
+
+        // 설정 저장 후 동시성/상한을 바꿔 적용한다(진행 중인 스캔에는 영향 없음, 다음 스캔부터).
+        public void ApplyOptions(ScanOptions options)
+        {
+            if (_engine != null) _engine.Options = options;
         }
 
         public void SchedulingScan() => _engine?.StartSchedulingScan(Config?.GetSystemName() ?? "");
@@ -280,7 +297,7 @@ namespace NetworkScanner.Avalonia.Views
         private void MenuItemPing_Click(object? sender, RoutedEventArgs e)
         {
             if (SelectedItem == null || _engine == null) return;
-            _engine.PingOnce(SelectedItem.Ip);
+            _ = _engine.PingOnceAsync(SelectedItem.Ip);
         }
 
         private void MenuItemCheckPort_Click(object? sender, RoutedEventArgs e)

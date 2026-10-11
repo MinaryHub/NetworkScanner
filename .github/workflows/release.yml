@@ -1,8 +1,13 @@
 name: Release
 
-# 버전 태그(v1.0.0 등)를 push하면 Windows/macOS/Linux용 Velopack 설치 패키지를 각각
-# 해당 OS 러너에서 만들고, 하나의 GitHub Release에 첨부한다.
+# 버전 태그(v1.0.0 등)를 push하면 Windows/macOS/Linux(x64·arm64)용 Velopack 설치 패키지, CLI 압축본,
+# 헤드리스 서비스 압축본, Docker 이미지를 만들고 하나의 GitHub Release에 첨부한다.
 # 수동 실행(workflow_dispatch)도 지원하며, 이 경우 버전을 직접 입력해야 한다.
+#
+# 코드 서명: 아래 secrets가 설정되어 있으면 서명/공증까지 수행하고, 없으면 서명 없이 패키징한다.
+#   Windows : WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD  (Authenticode, signtool)
+#   macOS   : MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD, MACOS_KEYCHAIN_PASSWORD,
+#             MACOS_SIGN_IDENTITY ("Developer ID Application: ..."), APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD (notarytool)
 on:
   push:
     tags:
@@ -15,35 +20,19 @@ on:
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
 
 jobs:
-  package:
-    name: Package (${{ matrix.rid }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-            mainExe: NetworkScanner.Avalonia.exe
-            icon: NetworkScanner/img/Kyo-Tux-Delikate-Network.ico
-          - os: macos-latest
-            rid: osx-arm64
-            mainExe: NetworkScanner.Avalonia
-            icon: ""
-          - os: ubuntu-latest
-            rid: linux-x64
-            mainExe: NetworkScanner.Avalonia
-            icon: ""
-    runs-on: ${{ matrix.os }}
+  version:
+    name: Determine version
+    runs-on: ubuntu-latest
+    outputs:
+      value: ${{ steps.v.outputs.value }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Determine version
-        id: version
+      - id: v
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -52,31 +41,124 @@ jobs:
             echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           fi
 
+  package:
+    name: GUI (${{ matrix.rid }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # channel: Velopack 업데이트 피드/파일 이름. 기존 설치본(1.7.x)이 보던 기본 채널(win/osx/linux)은
+          # x64(macOS는 arm64) 빌드가 그대로 차지하고, 새 아키텍처는 RID 이름의 채널을 쓴다(UpdateService와 맞춤).
+          - os: windows-latest
+            rid: win-x64
+            channel: win
+            mainExe: NetworkScanner.Avalonia.exe
+            icon: assets/app.ico
+          - os: windows-latest
+            rid: win-arm64
+            channel: win-arm64
+            mainExe: NetworkScanner.Avalonia.exe
+            icon: assets/app.ico
+          - os: macos-latest
+            rid: osx-arm64
+            channel: osx
+            mainExe: NetworkScanner.Avalonia
+            icon: ""
+          - os: macos-13
+            rid: osx-x64
+            channel: osx-x64
+            mainExe: NetworkScanner.Avalonia
+            icon: ""
+          - os: ubuntu-latest
+            rid: linux-x64
+            channel: linux
+            mainExe: NetworkScanner.Avalonia
+            icon: ""
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            channel: linux-arm64
+            mainExe: NetworkScanner.Avalonia
+            icon: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
       - name: Publish self-contained (${{ matrix.rid }})
         run: >
           dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj
           -c Release -r ${{ matrix.rid }} --self-contained true
-          -p:Version=${{ steps.version.outputs.value }}
+          -p:Version=${{ needs.version.outputs.value }}
           -o publish/${{ matrix.rid }}
+
+      # ---- Windows Authenticode (secrets가 있을 때만) ----
+      - name: Import Windows code-signing certificate
+        if: runner.os == 'Windows' && env.PFX != ''
+        shell: pwsh
+        env:
+          PFX: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:PFX))
+          echo "SIGN_PFX=$env:RUNNER_TEMP\cert.pfx" >> $env:GITHUB_ENV
+      - name: Sign Windows binaries
+        if: runner.os == 'Windows' && env.SIGN_PFX != ''
+        shell: pwsh
+        env:
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+          Get-ChildItem publish/${{ matrix.rid }} -Include *.exe,*.dll -Recurse | ForEach-Object {
+            & $signtool.FullName sign /f $env:SIGN_PFX /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName
+          }
+
+      # ---- macOS Developer ID 서명 + 공증 (secrets가 있을 때만) ----
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS' && env.P12 != ''
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import "$RUNNER_TEMP/cert.p12" -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          echo "MAC_SIGN=1" >> "$GITHUB_ENV"
 
       - name: Install Velopack CLI
         run: dotnet tool install -g vpk
-
       - name: Add dotnet tools to PATH
         shell: bash
         run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-      # vpk는 실행 중인 OS에 맞는 패키지만 만들 수 있어(크로스 패키징 불가), 매트릭스의
-      # 각 OS에서 자신의 패키지를 직접 만든다. Windows는 .exe 설치본, macOS는 .app/.pkg/.zip,
-      # Linux는 AppImage 계열 패키지가 만들어진다.
+      # vpk는 실행 중인 OS에 맞는 패키지만 만들 수 있어(크로스 패키징 불가), 매트릭스의 각 OS에서 자신의 패키지를 직접 만든다.
+      # macOS는 서명 ID/공증 자격이 있으면 vpk가 codesign + notarytool까지 수행한다.
       - name: Package with Velopack (${{ matrix.rid }})
         shell: bash
-        run: >
-          vpk pack --packId NetworkScanner --packVersion "${{ steps.version.outputs.value }}"
-          --packDir "publish/${{ matrix.rid }}" --mainExe "${{ matrix.mainExe }}"
-          --packTitle "Network Scanner" --packAuthors SMIC
-          --runtime ${{ matrix.rid }} --outputDir "release-packages/${{ matrix.rid }}"
-          ${{ matrix.icon != '' && format('--icon {0}', matrix.icon) || '' }}
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          EXTRA=""
+          if [ -n "${{ matrix.icon }}" ]; then EXTRA="$EXTRA --icon ${{ matrix.icon }}"; fi
+          if [ "${MAC_SIGN:-}" = "1" ] && [ -n "$MACOS_SIGN_IDENTITY" ]; then
+            EXTRA="$EXTRA --signAppIdentity \"$MACOS_SIGN_IDENTITY\" --signInstallIdentity \"$MACOS_SIGN_IDENTITY\""
+            if [ -n "$APPLE_ID" ]; then
+              xcrun notarytool store-credentials netscan-notary --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+              EXTRA="$EXTRA --notaryProfile netscan-notary"
+            fi
+          fi
+          eval vpk pack --packId NetworkScanner --packVersion "${{ needs.version.outputs.value }}" \
+            --packDir "publish/${{ matrix.rid }}" --mainExe "${{ matrix.mainExe }}" \
+            --packTitle "\"Network Scanner\"" --packAuthors SMIC \
+            --runtime ${{ matrix.rid }} --channel ${{ matrix.channel }} --outputDir "release-packages/${{ matrix.rid }}" $EXTRA
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -84,74 +166,101 @@ jobs:
           name: NetworkScanner-${{ matrix.rid }}
           path: release-packages/${{ matrix.rid }}
 
-  # 헤드리스/서버용 CLI(netscan)를 OS별 단일 실행 파일로 publish해 압축본으로 첨부한다.
-  # GUI 설치본(Velopack)과 달리 CLI는 단순 tar.gz/zip이면 충분하다.
-  cli:
-    name: CLI (${{ matrix.rid }})
+  # 헤드리스 CLI(netscan)와 스케줄러 서비스(netscan-service)를 OS/아키텍처별 단일 실행 파일로 publish해 압축본으로 첨부한다.
+  headless:
+    name: CLI + service (${{ matrix.rid }})
+    needs: version
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             rid: linux-x64
+          - os: ubuntu-latest
+            rid: linux-arm64
           - os: macos-latest
             rid: osx-arm64
+          - os: macos-latest
+            rid: osx-x64
           - os: windows-latest
             rid: win-x64
+          - os: windows-latest
+            rid: win-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Determine version
-        id: version
+      - name: Publish CLI and service (${{ matrix.rid }})
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          fi
+          for proj in NetworkScanner.Cli NetworkScanner.Service; do
+            dotnet publish $proj/$proj.csproj -c Release -r ${{ matrix.rid }} --self-contained true \
+              -p:PublishSingleFile=true -p:Version=${{ needs.version.outputs.value }} -o publish-headless/${{ matrix.rid }}
+          done
+          cp -r deploy publish-headless/${{ matrix.rid }}/deploy
 
-      - name: Publish CLI (${{ matrix.rid }})
-        run: >
-          dotnet publish NetworkScanner.Cli/NetworkScanner.Cli.csproj
-          -c Release -r ${{ matrix.rid }} --self-contained true
-          -p:PublishSingleFile=true -p:Version=${{ steps.version.outputs.value }}
-          -o publish-cli/${{ matrix.rid }}
-
-      - name: Archive CLI
+      - name: Archive
         shell: bash
         run: |
-          mkdir -p cli-packages
-          NAME="netscan-${{ steps.version.outputs.value }}-${{ matrix.rid }}"
-          if [ "${{ matrix.rid }}" = "win-x64" ]; then
-            (cd "publish-cli/${{ matrix.rid }}" && 7z a "../../cli-packages/${NAME}.zip" .)
+          mkdir -p headless-packages
+          NAME="netscan-${{ needs.version.outputs.value }}-${{ matrix.rid }}"
+          if [[ "${{ matrix.rid }}" == win-* ]]; then
+            (cd "publish-headless/${{ matrix.rid }}" && 7z a "../../headless-packages/${NAME}.zip" .)
           else
-            tar -czf "cli-packages/${NAME}.tar.gz" -C "publish-cli/${{ matrix.rid }}" .
+            tar -czf "headless-packages/${NAME}.tar.gz" -C "publish-headless/${{ matrix.rid }}" .
           fi
 
-      - name: Upload CLI artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: netscan-${{ matrix.rid }}
-          path: cli-packages
+          path: headless-packages
+
+  docker:
+    name: Docker image (CLI)
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/netscan:${{ needs.version.outputs.value }}
+            ghcr.io/${{ github.repository_owner }}/netscan:latest
 
   release:
     name: Create GitHub Release
-    needs: [package, cli]
+    needs: [version, package, headless]
     runs-on: ubuntu-latest
     steps:
-      - name: Download all platform packages
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - name: Flatten
+        shell: bash
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          ls -la release
+      - uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          tag_name: v${{ needs.version.outputs.value }}
+          name: v${{ needs.version.outputs.value }}
           generate_release_notes: true
           fail_on_unmatched_files: true
+          files: release/*

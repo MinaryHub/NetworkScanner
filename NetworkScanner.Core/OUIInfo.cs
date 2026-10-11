@@ -22,11 +22,11 @@ namespace NetworkScanner
             string[] sContents;
             try
             {
-                sContents = File.ReadAllLines(DataPaths.Resolve("ouiinfo.ini"), Encoding.Default);
+                sContents = File.ReadAllLines(DataPaths.Resolve("ouiinfo.ini"), Encoding.UTF8);
             }
             catch (Exception ex)
             {
-                OnError?.Invoke("ouiinfo.ini 로드 실패: " + ex.Message);
+                OnError?.Invoke(string.Format(Localization.T("msg.store.loadfailed"), "ouiinfo.ini", ex.Message));
                 return;
             }
 
@@ -44,7 +44,7 @@ namespace NetworkScanner
                 }
                 catch (Exception ex)
                 {
-                    OnError?.Invoke("ouiinfo.ini 파싱 실패(줄 건너뜀): " + ex.Message);
+                    OnError?.Invoke(string.Format(Localization.T("msg.parse.skipped"), "ouiinfo.ini", ex.Message));
                 }
             }
         }

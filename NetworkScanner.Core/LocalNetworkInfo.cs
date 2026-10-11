@@ -38,7 +38,7 @@ namespace NetworkScanner
                         Index = 0,
                         StartIP = IPRangeUtil.FromUInt32(start).ToString(),
                         EndIP = IPRangeUtil.FromUInt32(end).ToString(),
-                        Description = $"자동 감지된 로컬 대역 ({nic.Name})",
+                        Description = string.Format(Localization.T("local.autodetected"), nic.Name),
                     };
                 }
             }

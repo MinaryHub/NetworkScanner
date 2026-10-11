@@ -4,80 +4,76 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A desktop network scanner: pings an IP range, records each host's alive state, open TCP ports, MAC/vendor, and hostname, saves results to CSV, optionally uploads via FTP, and flags open ports that match a reserved/prohibited (backdoor) port list. Two UIs share one scan engine.
+A network inventory / security scanner: pings an IP range, records each host's alive state, open TCP ports, MAC/vendor, hostname and service banner, flags open ports that match a reserved/prohibited (backdoor) port list, detects changes between scans, keeps a SQLite history, saves CSV/HTML/JSON reports, uploads them (FTPS/SFTP/HTTPS) with a retry outbox, and sends alerts (webhook/syslog/SMTP). One engine (`NetworkScanner.Core`) is driven by three front-ends: a cross-platform Avalonia GUI, a CLI (`netscan`) and a headless scheduler service (`netscan-service`).
 
 ## Build / test / run
 
+Requires the **.NET 10 SDK** (all projects target `net10.0`). On this machine it is installed under `~/.dotnet`; if `dotnet --version` shows 9.x, prefix commands with `PATH="$HOME/.dotnet:$PATH" DOTNET_ROOT="$HOME/.dotnet"`.
+
 ```bash
-# Full solution build — only works on Windows (includes the WPF project)
+# Whole solution — builds on Windows, macOS and Linux (there are no OS-specific projects)
 dotnet build NetworkScanner.sln
 
-# On macOS/Linux the WPF project can't run, but you can still compile-check the whole solution:
-dotnet build NetworkScanner.sln -p:EnableWindowsTargeting=true
-
-# Run the cross-platform Avalonia app (Windows/macOS/Linux)
+# GUI
 dotnet run --project NetworkScanner.Avalonia
 
-# Tests (xUnit) — Core-only, runs on any OS
+# CLI
+dotnet run --project NetworkScanner.Cli -- --range 192.168.1.0/24 --ports 22,80
+dotnet run --project NetworkScanner.Cli -- history inventory
+
+# Headless scheduler (foreground; --run-once for a single scheduled-style scan)
+dotnet run --project NetworkScanner.Service -- --run-once
+
+# Tests (xUnit, Core only, no network needed except two loopback tests)
 dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj
 
 # A single test
-dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --filter "FullyQualifiedName~ScanEngineTests.ComputeIPCount_RangeCrossingSubnetBoundary_CountsCorrectly"
+dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --filter "FullyQualifiedName~ScanEngineIntegrationTests"
 ```
 
-Note on testability: `NetworkScanner.Tests` references **only** `NetworkScanner.Core`. The WPF project targets `net8.0-windows10.0.20348.0` with `UseWPF=true`, so anything depending on it cannot execute on non-Windows (the Windows Desktop runtime doesn't exist there). Keep test-worthy logic in Core.
+Tests set `UserDataPaths.OverrideRoot` and `AppSettingsStore.SecretStore` to temp locations and run **non-parallel** (`AssemblyInfo.cs`) because of that static state. Keep test-worthy logic in Core.
 
 ## Architecture
 
-The important structural fact: **all real logic lives in `NetworkScanner.Core` (a plain `net8.0` library with no UI dependency). The two UIs are thin adapters over it.**
+**All real logic lives in `NetworkScanner.Core` (plain `net10.0`, no UI dependency). Core contains no `OperatingSystem.Is*`, `Process.Start` or `DllImport` outside the designated adapter folders (`Platform/`, `Secrets/`).** The front-ends are thin adapters.
 
-- **`NetworkScanner.Core`** — scan engine, settings/CSV/ini persistence, IP-range math, OS-specific helpers. Shared by both UIs and exercised by the tests.
-- **`NetworkScanner`** — Windows-only **WPF** UI (`net8.0-windows...`, `UseWPF=true`).
-- **`NetworkScanner.Avalonia`** — cross-platform **Avalonia** UI (`net8.0`).
-- **`NetworkScanner.Cli`** — headless cross-platform console front-end (`netscan`) over Core; implements `IScanConfigProvider` from command-line args, subscribes to the engine events, and prints table/JSON/CSV. Progress → stderr, results → stdout.
+- **`NetworkScanner.Core`**
+  - `ScanEngine` — the center. Two-phase range scan (parallel ping + TCP liveness → enrichment of alive hosts), single-host port checks, CSV load/save, change detection, history recording, report + upload.
+  - `ScanServices` — the dependency bundle the engine uses: `IPinger`, `IPortProber`, `IHostNameResolver` (`Network/NetworkProbes.cs`), `IArpResolver` (`Platform/`), `UploadService` (`Upload/`), `ScanHistoryStore` (`History/`), `Clock`. `ScanServices.CreateDefault()` for apps, `CreateOffline(...)` + fakes for tests.
+  - `ScanOptions` — timeouts, parallelism, `MaxTargets` safety cap. `ScanOptions.FromSettings(AppSettingsData)`.
+  - `IScanConfigProvider` — the seam front-ends implement (port list, `UploadSettings`, system name, port lists, ranges). The engine never reads UI controls.
+  - `AppSettingsStore` — `settings.json` (schema v2) in the user data folder; migrates legacy `setting.ini`/`iprange.ini` once (renamed to `*.migrated`). Secrets never go to JSON: they live in `ISecretStore` under keys `upload-password`, `upload-token`, `smtp-password`.
+  - `Secrets/` — `ISecretStore`: DPAPI (Windows), Keychain via `security -i` on stdin (macOS), `secret-tool` (Linux), with `EncryptedFileSecretStore` (AES-256-GCM, key file 0600) as the always-available fallback. **No Base64 fallback exists any more.** `LegacyCredentialFormat` decodes old ini values during migration.
+  - `Platform/` — native ARP table readers: `/proc/net/arp` (Linux), `sysctl` routing socket (macOS, header 92 bytes — verified), `GetIpNetTable2` (Windows). No `arp` binary needed (macOS falls back to `arp -an` only if sysctl fails).
+  - `Upload/` — `IResultUploader` implementations `FtpUploader` (FTP/FTPS explicit/implicit, cert fingerprint pin), `SftpUploader` (SSH.NET, host-key pin or TOFU `known_hosts`), `HttpsUploader` (multipart + Bearer). `UploadOutbox` queues failures with backoff; `UploadService` = try now, else enqueue, then flush.
+  - `History/` — `ScanHistoryStore` (SQLite `history.db`, WAL): scans, per-scan hosts, inventory (first/last seen). Also the change-detection baseline after a restart.
+  - `Notifications/` — `Notifier` with webhook / syslog(UDP RFC 5424) / SMTP channels.
+  - `CsvCodec` — RFC 4180 + formula-injection guard. CSV columns are header-mapped, so old 9-column files still load.
+  - `AppLogger` — daily rolling files in `<userdata>/logs`, `Sink` event for hosts to mirror to console/UI. No Windows EventLog.
+  - `Localization` — all user-visible Core strings go through `Localization.T(key)` (en/ko). Do not add hardcoded Korean/English strings to Core.
+- **`NetworkScanner.Avalonia`** — the only GUI. `MainWindow` implements `IScanConfigProvider` by delegating to `SettingsView`. Views: IP list, Settings (upload/notifications/limits with `AppSettingsData.Validate()`), Ref. ports, History, User guide. `UpdateService` = Velopack + GitHub Releases.
+- **`NetworkScanner.Cli`** — `netscan`: scan (`--use-settings`, `--upload`, `--notify`, `--scheduled`) and `history` subcommands. Progress → stderr, results → stdout, exit code 3 when risky ports were found.
+- **`NetworkScanner.Service`** — `netscan-service`: `Microsoft.Extensions.Hosting` worker (Windows Service / systemd / launchd / foreground) running the schedule from `settings.json` with last-run catch-up. Unit/plist/PowerShell installers live in `deploy/`.
 - **`NetworkScanner.Tests`** — xUnit, references Core only.
-- **`OUIConvertor`** — standalone WPF utility that regenerates `ouiinfo.ini` (MAC OUI → vendor table); not part of the app runtime.
-- **`SetupNetworkScanner`** — legacy WPF `.vdproj` installer; not built by `dotnet` (MSBuild warns and skips it).
+- **`data/`** — `ouiinfo.ini` (raw IEEE `oui.txt`; refresh with `tools/update-oui.sh`), `reservedports.ini`, `prohibitports.ini`; linked into the GUI/CLI/service outputs. **`assets/`** — icon and toolbar images.
 
-### How the UI talks to the engine
+### Events and threading (read before touching the scan loop)
 
-`ScanEngine` (in Core) is the center. A UI creates one, passing:
-- the observable `IPInfoList` it binds its grid to,
-- an `OUIInfo` (loaded vendor table),
-- an **`IScanConfigProvider`** — the decoupling seam. The engine never reads UI controls; it calls this interface for port lists, FTP creds, scan ranges, system name, etc. In both apps the main window implements it (WPF `MainNetworkScanner`, Avalonia `MainWindow`), delegating to the settings views.
+The engine reports through events; UI handlers marshal to the UI thread: `Message`, `ProgressMaxChanged`, `ProgressChanged`, `ResultsSummaryChanged`, `ItemsRefreshNeeded`, `ScanStarted`, `ScanFinished`, `ScanChangesDetected`. Progress messages are throttled (~150 ms) by `MessageThrottle`.
 
-The engine reports everything through events; UI handlers marshal them to the UI thread:
-`Message`, `ProgressMaxChanged`, `ProgressChanged`, `ResultsSummaryChanged`, `ItemsRefreshNeeded`, `ScanStarted`, `ScanFinished`.
+`DoScanAllRange` runs IPs through `Parallel.ForEachAsync` (`ScanOptions.Parallelism`, default 64); per-host ports are probed concurrently (`PortParallelism`). Results arrive on many threads:
+- `_items` writes are serialized under `ScanEngine.ItemsSyncRoot`; `ItemsRefreshNeeded` is fired **outside** that lock.
+- Config is read once before the loop, never per IP.
+- Avalonia rebuilds its grid from a snapshot copied under the lock and coalesces refreshes. `IPInfo` does **not** implement `INotifyPropertyChanged`.
+- `Start*` methods are guarded by `TryBeginScan` (one scan at a time) and wrapped in `RunTracked`.
 
-`Start*` methods (`StartRefreshAllRange`, `StartSchedulingScan`, `StartCheck*PortList`) are guarded by `TryBeginScan` (lock + `CancellationTokenSource`) so only one scan runs at a time, and wrapped in `RunTracked` which raises `ScanStarted`/`ScanFinished`. `ScanningStop()` cancels the token — the "취소" button.
+### Cross-platform rules
 
-### Concurrency model (read before touching the scan loop)
-
-`DoScanAllRange` runs IPs through `Parallel.ForEachAsync` (up to `ScanParallelism` = 64) using async ping/port-check. Because results arrive on many worker threads:
-- `_items` writes are serialized under `_itemsLock`, exposed as **`ScanEngine.ItemsSyncRoot`**.
-- `ItemsRefreshNeeded` is fired **outside** that lock — firing it inside while a UI handler needs the same lock deadlocks.
-- Per-IP config (prohibited ports, port-checking flag) is prefetched once before the loop, not read from `Config` per IP (that would marshal to the UI thread 64× concurrently).
-- WPF calls `BindingOperations.EnableCollectionSynchronization(_IPInfoList, engine.ItemsSyncRoot)`; Avalonia rebuilds its grid from a snapshot copied under that lock. Both UIs use non-blocking dispatch (`BeginInvoke` / `Post`) and coalesce rapid refresh requests.
-
-`IPInfo` does **not** implement `INotifyPropertyChanged` — property edits to existing rows are reflected only when the UI is told to refresh (hence `ItemsRefreshNeeded`).
-
-### Cross-platform seams (Core)
-
-OS branches live behind small helpers so the rest of Core stays portable:
-- `ArpResolver` — Windows `SendARP` P/Invoke vs. Unix `arp` command parsing (Unix needs a prior ping to populate the ARP cache; the scan always pings first).
-- `CredentialProtector` — DPAPI (Windows) / Keychain `security` (macOS) / libsecret `secret-tool` (Linux), falling back to Base64 obfuscation when unavailable.
-- `PingTester` — logs an ICMP-permission hint once when raw-socket access is denied (common on Linux/macOS).
-- `IPRangeUtil` — treats IPv4 as `uint32` so ranges spanning subnet boundaries (e.g. `10.0.1.250`–`10.0.2.10`) count/iterate correctly. Do not revert to last-octet math.
-- `LocalNetworkInfo` — detects the active interface's subnet; `AppSettingsStore.LoadScanRanges` seeds it as the default range when none are configured.
-
-## Runtime data files
-
-`ouiinfo.ini`, `reservedports.ini`, `prohibitports.ini` live in the WPF project and are linked into the Avalonia project (copied to output, not duplicated). User data — `setting.ini`, `iprange.ini`, `annotations.ini`, and the `env/` scan-result folder — is written via `UserDataPaths` to a per-user directory (`%APPDATA%\NetworkScanner` on Windows, `~/.config/NetworkScanner` on Unix) so Velopack updates, which replace the app folder, don't wipe it. `UserDataPaths` migrates files it finds in the old locations (working dir / exe dir) once. Tests set `UserDataPaths.OverrideRoot` instead of touching the real profile. Do not commit these files.
-
-## Making changes across both UIs
-
-A UI-facing change almost always needs mirroring in **both** WPF (`NetworkScanner/UC*.xaml[.cs]`, `MainNetworkScanner.xaml[.cs]`) and Avalonia (`NetworkScanner.Avalonia/Views/*.axaml[.cs]`, `MainWindow.axaml[.cs]`). Prefer pushing shared logic into Core so it's tested once and both UIs stay thin.
+- IPv4 math uses `uint32` (`IPRangeUtil`); never last-octet math.
+- Use `CultureInfo.InvariantCulture` for anything persisted; UTF-8 without BOM for files; case-insensitive file matching (`EnumerationOptions`).
+- `UserDataPaths` → `%APPDATA%\NetworkScanner` (Windows), `~/Library/Application Support/NetworkScanner` (macOS, .NET 10 mapping; old `~/.config/NetworkScanner` is migrated), `~/.config/NetworkScanner` (Linux) (settings.json, history.db, env/, outbox/, logs/, secrets/, known_hosts). Tests override `UserDataPaths.OverrideRoot`.
+- A UI-facing change usually needs a matching CLI option; put the logic in Core so it is tested once.
 
 ## Releases
 
-Pushing a `vMAJOR.MINOR.PATCH` git tag triggers `.github/workflows/release.yml`, which publishes and Velopack-packages the **Avalonia** app on each of Windows/macOS/Linux runners and attaches the installers to a GitHub Release. `dotnet publish -p:Version=<tag>` stamps the real version. Both UIs show `ver. Major.Minor.Build` in the sidebar. Installers are unsigned — expect Gatekeeper/SmartScreen/AV false-positive warnings (documented in README).
+Pushing `vMAJOR.MINOR.PATCH` runs `.github/workflows/release.yml`: Velopack GUI packages for win-x64/arm64, osx-arm64/x64, linux-x64/arm64 (channels `win`, `win-arm64`, `osx`, `osx-x64`, `linux`, `linux-arm64` — `UpdateService` must pick the matching channel), CLI+service archives, a `ghcr.io/<owner>/netscan` Docker image, and a GitHub Release. Code signing/notarization runs only when the documented secrets exist; otherwise packages are unsigned (Gatekeeper/SmartScreen warnings expected). `build-and-test.yml` runs tests and the full build on all three OSes plus a vulnerable-package check.

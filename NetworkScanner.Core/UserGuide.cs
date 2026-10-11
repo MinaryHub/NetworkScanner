@@ -33,8 +33,8 @@ namespace NetworkScanner
             new("Overview",
                 "Network Scanner discovers the devices on your network. It pings every IP in the configured " +
                 "ranges, then collects each live host's open TCP ports, MAC address and vendor, and host name. " +
-                "Results can be saved as CSV, exported as HTML/JSON reports, and optionally uploaded to an FTP " +
-                "server. Open ports are checked against a list of ports commonly abused by backdoors, and " +
+                "Results can be saved as CSV, exported as HTML/JSON reports, and optionally uploaded to a " +
+                "server (FTPS, SFTP or HTTPS). Open ports are checked against a list of ports commonly abused by backdoors, and " +
                 "matching hosts are flagged."),
             new("Running a scan",
                 "Open the IP List screen and press Scan. The scan runs in two phases: phase 1 quickly pings the " +
@@ -62,14 +62,21 @@ namespace NetworkScanner
                 "'Save' writes the current list to a CSV file; 'Open' loads a previous one; 'New' clears the " +
                 "list. 'Report' exports a formatted HTML or JSON report. All files are kept in the 'env' folder " +
                 "inside your user-data directory (%APPDATA%\\NetworkScanner on Windows, " +
-                "~/.config/NetworkScanner on macOS/Linux), which survives updates. Enable 'Load latest file on " +
+                "~/Library/Application Support/NetworkScanner on macOS, ~/.config/NetworkScanner on Linux), which survives updates. Enable 'Load latest file on " +
                 "startup' to restore the most recent results automatically."),
-            new("Scheduling, monitoring & FTP",
+            new("Scheduling, monitoring & upload",
                 "Enable Scheduling and tick hours of the day: a scan then starts automatically at the beginning " +
                 "of each ticked hour and saves a CSV and an HTML report by itself. Continuous monitoring " +
                 "rescans every N minutes instead. When a scan detects changes - a new host, a host going " +
                 "offline, a changed MAC address, or a newly opened/risky port - a security-alert dialog lists " +
-                "them. If FTP upload is enabled, saved files are also uploaded to the configured server."),
+                "them. If result upload is enabled, saved files are also sent to the configured server " +
+                "(FTPS/SFTP/HTTPS); failed uploads are queued and retried automatically."),
+            new("History & notifications",
+                "Every scan is recorded in a local database. The History screen lists past scans and an " +
+                "inventory of every device ever seen (first/last seen, last MAC, last open ports); use " +
+                "'Prune' to delete old scans. In Settings you can also enable notifications so that detected " +
+                "changes are posted to a webhook (Slack/Teams), a syslog server or sent by e-mail. The " +
+                "headless scheduler service (netscan-service) runs the same schedule without the GUI."),
             new("Updates",
                 "The app checks GitHub for a newer version at startup. When one is found, an Update button " +
                 "appears at the bottom of the sidebar; click it to download the update and restart into the " +
@@ -90,7 +97,7 @@ namespace NetworkScanner
             new("개요",
                 "Network Scanner는 네트워크에 연결된 장비를 찾아줍니다. 설정한 대역의 모든 IP에 Ping을 보낸 뒤, " +
                 "살아있는 호스트의 열린 TCP 포트, MAC 주소와 제조사, 호스트 이름을 수집합니다. 결과는 CSV로 저장하고 " +
-                "HTML/JSON 리포트로 내보낼 수 있으며, FTP 서버 업로드도 지원합니다. 열린 포트는 백도어가 자주 쓰는 " +
+                "HTML/JSON 리포트로 내보낼 수 있으며, 서버 업로드(FTPS/SFTP/HTTPS)도 지원합니다. 열린 포트는 백도어가 자주 쓰는 " +
                 "포트 목록과 비교해 해당 호스트를 경고로 표시합니다."),
             new("스캔 실행",
                 "IP 리스트 화면에서 스캔 버튼을 누르세요. 스캔은 2단계로 진행됩니다. 1단계는 대역 전체를 빠르게 " +
@@ -114,14 +121,19 @@ namespace NetworkScanner
             new("저장과 리포트",
                 "'파일 저장'은 현재 목록을 CSV로 저장하고, '파일 열기'는 이전 CSV를 불러오며, '새로 만들기'는 목록을 " +
                 "비웁니다. '리포트'는 보기 좋은 HTML 또는 JSON 리포트를 내보냅니다. 모든 파일은 사용자 데이터 " +
-                "폴더(Windows: %APPDATA%\\NetworkScanner, macOS/Linux: ~/.config/NetworkScanner) 안의 env 폴더에 " +
+                "폴더(Windows: %APPDATA%\\NetworkScanner, macOS: ~/Library/Application Support/NetworkScanner, Linux: ~/.config/NetworkScanner) 안의 env 폴더에 " +
                 "저장되어 업데이트 후에도 유지됩니다. '시작시 최근 기록 부르기'를 켜면 시작할 때 가장 최근 결과를 " +
                 "자동으로 불러옵니다."),
-            new("스케줄링·모니터링·FTP",
+            new("스케줄링·모니터링·업로드",
                 "스케줄링을 켜고 시간대를 체크하면, 체크한 시각의 정각마다 스캔이 자동 실행되고 CSV와 HTML 리포트가 " +
                 "자동 저장됩니다. 연속 모니터링은 N분 간격으로 계속 재스캔합니다. 스캔에서 변화(새 호스트, 오프라인 " +
-                "전환, MAC 변경, 새로 열린/위험 포트)가 감지되면 보안 경고 대화상자로 알려줍니다. FTP 저장을 켜면 " +
-                "저장된 파일이 설정한 서버로도 업로드됩니다."),
+                "전환, MAC 변경, 새로 열린/위험 포트)가 감지되면 보안 경고 대화상자로 알려줍니다. 결과 업로드를 켜면 " +
+                "저장된 파일이 설정한 서버(FTPS/SFTP/HTTPS)로도 전송되며, 실패한 업로드는 대기열에 넣어 자동으로 재시도합니다."),
+            new("이력·알림",
+                "모든 스캔은 로컬 데이터베이스에 기록됩니다. 이력 화면에서 과거 스캔 목록과 지금까지 발견된 모든 장비의 " +
+                "인벤토리(최초/최근 발견, 마지막 MAC, 마지막 열린 포트)를 볼 수 있고, '정리'로 오래된 스캔을 지울 수 " +
+                "있습니다. 설정에서 알림을 켜면 감지된 변화를 웹훅(Slack/Teams), syslog 서버, 이메일로 보냅니다. " +
+                "헤드리스 스케줄러 서비스(netscan-service)는 GUI 없이 같은 스케줄을 실행합니다."),
             new("업데이트",
                 "앱은 시작할 때 GitHub에서 새 버전을 확인합니다. 새 버전이 있으면 사이드바 하단에 업데이트 버튼이 " +
                 "나타나며, 누르면 다운로드 후 새 버전으로 재시작됩니다. 설정과 스캔 기록은 업데이트 후에도 유지됩니다."),
@@ -141,7 +153,7 @@ namespace NetworkScanner
             new("概要",
                 "Network Scanner はネットワーク上の機器を検出するツールです。設定した範囲のすべての IP に Ping を" +
                 "送り、応答したホストの開いている TCP ポート、MAC アドレスとベンダー、ホスト名を収集します。結果は " +
-                "CSV に保存でき、HTML/JSON レポートへの出力や FTP サーバーへのアップロードにも対応します。開いている" +
+                "CSV に保存でき、HTML/JSON レポートへの出力やサーバー(FTPS/SFTP/HTTPS)へのアップロードにも対応します。開いている" +
                 "ポートはバックドアがよく使うポートの一覧と照合され、該当するホストは警告として表示されます。"),
             new("スキャンの実行",
                 "IP リスト画面でスキャンボタンを押します。スキャンは 2 段階で進みます。第 1 段階では範囲全体を高速に " +
@@ -166,15 +178,21 @@ namespace NetworkScanner
             new("保存とレポート",
                 "「保存」は現在のリストを CSV に書き出し、「開く」は以前の CSV を読み込み、「新規」はリストをクリア" +
                 "します。「レポート」は整形済みの HTML または JSON レポートを出力します。ファイルはすべてユーザー" +
-                "データフォルダー(Windows: %APPDATA%\\NetworkScanner、macOS/Linux: ~/.config/NetworkScanner)内の " +
+                "データフォルダー(Windows: %APPDATA%\\NetworkScanner、macOS: ~/Library/Application Support/NetworkScanner、Linux: ~/.config/NetworkScanner)内の " +
                 "env フォルダーに保存され、アップデート後も保持されます。「起動時に最新ファイルを読み込む」を有効に" +
                 "すると、起動時に最新の結果を自動で復元します。"),
-            new("スケジュール・監視・FTP",
+            new("スケジュール・監視・アップロード",
                 "スケジュールを有効にして時間帯にチェックを入れると、チェックした時刻の毎正時にスキャンが自動実行され、" +
                 "CSV と HTML レポートが自動保存されます。連続監視は N 分間隔で再スキャンを繰り返します。スキャンで" +
                 "変化(新しいホスト、オフライン化、MAC アドレスの変更、新たに開いた/危険なポート)を検出すると、" +
-                "セキュリティ警告ダイアログで一覧表示します。FTP アップロードを有効にすると、保存したファイルは設定" +
-                "したサーバーにもアップロードされます。"),
+                "セキュリティ警告ダイアログで一覧表示します。結果アップロードを有効にすると、保存したファイルは設定" +
+                "したサーバー(FTPS/SFTP/HTTPS)にも送信され、失敗したアップロードはキューに入れて自動的に再試行されます。"),
+            new("履歴・通知",
+                "すべてのスキャンはローカルデータベースに記録されます。履歴画面では過去のスキャン一覧と、これまでに" +
+                "検出した全機器のインベントリ(初回/最終検出、最後の MAC、最後の開放ポート)を確認でき、「整理」で古い" +
+                "スキャンを削除できます。設定で通知を有効にすると、検出した変化を Webhook(Slack/Teams)、syslog " +
+                "サーバー、メールで送信します。ヘッドレスのスケジューラーサービス(netscan-service)は GUI なしで同じ" +
+                "スケジュールを実行します。"),
             new("アップデート",
                 "アプリは起動時に GitHub で新しいバージョンを確認します。新しいバージョンが見つかると、サイドバー" +
                 "下部にアップデートボタンが表示されます。クリックするとダウンロード後、新しいバージョンで再起動" +
@@ -195,8 +213,8 @@ namespace NetworkScanner
         {
             new("概述",
                 "Network Scanner 用于发现网络中的设备。它对设定范围内的所有 IP 发送 Ping,然后收集每台在线主机的" +
-                "开放 TCP 端口、MAC 地址与厂商、主机名。结果可保存为 CSV,导出为 HTML/JSON 报告,并可选上传到 FTP " +
-                "服务器。开放端口会与后门程序常用端口列表比对,匹配的主机将被标记为警告。"),
+                "开放 TCP 端口、MAC 地址与厂商、主机名。结果可保存为 CSV,导出为 HTML/JSON 报告,并可选上传到" +
+                "服务器(FTPS/SFTP/HTTPS)。开放端口会与后门程序常用端口列表比对,匹配的主机将被标记为警告。"),
             new("运行扫描",
                 "打开 IP 列表界面,点击扫描按钮。扫描分两个阶段:第一阶段快速 Ping 整个范围,在线主机几秒内即会显示;" +
                 "第二阶段在后台补全详细信息(MAC、厂商、主机名、开放端口)。随时可点击取消停止。行颜色:绿色 = 正常," +
@@ -215,13 +233,17 @@ namespace NetworkScanner
                 "发送 Ping、检查该主机的配置/保留/危险端口、发送网络唤醒(Wake-on-LAN)、删除该行。"),
             new("保存与报告",
                 "“保存”将当前列表写入 CSV 文件;“打开”载入以前的 CSV;“新建”清空列表。“报告”可导出排版好的 " +
-                "HTML 或 JSON 报告。所有文件保存在用户数据目录(Windows: %APPDATA%\\NetworkScanner,macOS/Linux: " +
+                "HTML 或 JSON 报告。所有文件保存在用户数据目录(Windows: %APPDATA%\\NetworkScanner,macOS: ~/Library/Application Support/NetworkScanner,Linux: " +
                 "~/.config/NetworkScanner)下的 env 文件夹中,更新后不会丢失。启用“启动时载入最新文件”可在启动时" +
                 "自动恢复最近的结果。"),
-            new("计划任务、监控与 FTP",
+            new("计划任务、监控与上传",
                 "启用计划任务并勾选小时:在勾选的每个整点会自动开始扫描,并自动保存 CSV 和 HTML 报告。持续监控则每隔 " +
                 "N 分钟重新扫描一次。当扫描检测到变化(新主机、主机离线、MAC 地址变化、新开放/危险端口)时,会弹出" +
-                "安全警告对话框列出详情。启用 FTP 上传后,保存的文件还会上传到设定的服务器。"),
+                "安全警告对话框列出详情。启用结果上传后,保存的文件还会发送到设定的服务器(FTPS/SFTP/HTTPS);上传失败会进入队列并自动重试。"),
+            new("历史与通知",
+                "每次扫描都会记录到本地数据库。历史界面列出过去的扫描以及曾发现的所有设备清单(首次/最近发现、最近 MAC、" +
+                "最近开放端口),可用“清理”删除旧扫描。在设置中启用通知后,检测到的变化会推送到 Webhook(Slack/Teams)、" +
+                "syslog 服务器或通过邮件发送。无界面的计划服务(netscan-service)可在没有 GUI 的情况下执行相同的计划。"),
             new("更新",
                 "应用启动时会在 GitHub 上检查新版本。发现新版本时,侧边栏底部会出现更新按钮;点击即可下载并重启到" +
                 "新版本。设置和扫描记录在更新后会保留。"),

@@ -2,182 +2,195 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using NetworkScanner.Secrets;
+using NetworkScanner.Upload;
 
 namespace NetworkScanner
 {
-    // setting.ini/iprange.ini의 실제 읽기/쓰기를 담당한다. WPF/Avalonia UI가 공유하며,
-    // UI는 AppSettingsData를 화면 컨트롤과 매핑하는 역할만 한다.
+    // settings.json의 실제 읽기/쓰기를 담당한다. GUI/CLI/서비스가 공유하며, UI는 AppSettingsData를 화면 컨트롤과 매핑하는
+    // 역할만 한다. 비밀번호/토큰은 JSON에 쓰지 않고 ISecretStore(OS 자격 증명 저장소 또는 암호화 파일)에 보관한다.
+    // 이전 버전의 setting.ini / iprange.ini 가 있으면 최초 1회 자동 변환한다.
     public static class AppSettingsStore
     {
-        public const string SettingFileName = "setting.ini";
-        public const string IPRangeFileName = "iprange.ini";
+        public const string SettingsFileName = "settings.json";
+        public const string SettingFileName = "setting.ini";    // 레거시
+        public const string IPRangeFileName = "iprange.ini";    // 레거시
+        public const int CurrentSchemaVersion = 2;
+
+        public const string UploadPasswordKey = "upload-password";
+        public const string UploadTokenKey = "upload-token";
+        public const string SmtpPasswordKey = "smtp-password";
 
         public static Action<string>? OnError { get; set; }
 
-        private const string KeyUseScheduling = "usescheuling";
-        private const string KeyUseFTP = "useftp";
-        private const string KeyFTPIP = "ftpip";
-        private const string KeyFTPID = "ftpid";
-        private const string KeyFTPPW = "ftppw";
-        private const string KeyFTPPORT = "ftpport";
-        private const string KeySystemName = "systemname";
-        private const string KeyPortList = "portlist";
-        private const string KeyUsePortChecking = "useportchecking";
-        private const string KeyLoadLatestFile = "loadlastestfile";
-        private const string KeyContinuousMonitoring = "continuousmonitoring";
-        private const string KeyMonitorInterval = "monitorintervalminutes";
-        private const string KeyLanguage = "language";
-        private const string KeyIpListColWidths = "iplistcolwidths";
-        private const string KeyIpRangeColWidths = "iprangecolwidths";
+        private static ISecretStore? _secretStore;
+        private static readonly object Lock = new();
 
-        private static string HourKey(int label) => string.Format("hr{0:D2}", label);
-
-        public static AppSettingsData LoadSettings()
+        // 테스트는 임시 디렉터리 기반 저장소를 끼운다.
+        public static ISecretStore SecretStore
         {
-            var data = new AppSettingsData();
-            string filename = UserDataPaths.Resolve(SettingFileName);
+            get => _secretStore ??= SecretStoreFactory.CreateDefault(UserDataPaths.Root);
+            set => _secretStore = value;
+        }
 
-            if (!File.Exists(filename))
+        // settings.json 전체 문서. 설정값 + 스캔 대역을 한 파일에 둔다.
+        public sealed class SettingsDocument
+        {
+            public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+            public AppSettingsData Settings { get; set; } = new();
+            public List<ScanRangeInfo> ScanRanges { get; set; } = new();
+        }
+
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        };
+
+        public static string SettingsPath => UserDataPaths.Resolve(SettingsFileName);
+
+        public static AppSettingsData LoadSettings() => LoadDocument().Settings;
+
+        public static SettingsDocument LoadDocument()
+        {
+            lock (Lock)
             {
-                try { using (File.Create(filename)) { } }
-                catch (Exception ex) { OnError?.Invoke("setting.ini 생성 실패: " + ex.Message); }
-                return data;
+                SettingsDocument doc = ReadDocument() ?? MigrateLegacy() ?? new SettingsDocument();
+                LoadSecrets(doc.Settings);
+                return doc;
             }
+        }
 
-            foreach (string rawLine in File.ReadAllLines(filename))
+        private static SettingsDocument? ReadDocument()
+        {
+            string path = SettingsPath;
+            if (!File.Exists(path)) return null;
+            try
             {
-                if (string.IsNullOrWhiteSpace(rawLine)) continue;
-
-                string[] token = rawLine.Split('=');
-                if (token.Length < 2) continue;
-
-                try
-                {
-                    bool matchedHour = false;
-                    for (int label = 1; label <= 24; label++)
-                    {
-                        if (token[0] == HourKey(label))
-                        {
-                            data.HourEnabled[label - 1] = bool.Parse(token[1]);
-                            matchedHour = true;
-                            break;
-                        }
-                    }
-                    if (matchedHour) continue;
-
-                    switch (token[0])
-                    {
-                        case KeyUseScheduling: data.UseScheduling = bool.Parse(token[1]); break;
-                        case KeyUseFTP: data.UseFTP = bool.Parse(token[1]); break;
-                        case KeyFTPIP: data.FtpIp = token[1]; break;
-                        case KeyFTPID: data.FtpId = token[1]; break;
-                        case KeyFTPPW: data.FtpPassword = CredentialProtector.Unprotect(token[1]); break;
-                        case KeyFTPPORT: data.FtpPort = token[1]; break;
-                        case KeySystemName: data.SystemName = token[1]; break;
-                        case KeyPortList: data.PortList = token[1]; break;
-                        case KeyUsePortChecking: data.UsePortChecking = bool.Parse(token[1]); break;
-                        case KeyLoadLatestFile: data.LoadLatestFileOnStartup = bool.Parse(token[1]); break;
-                        case KeyContinuousMonitoring: data.ContinuousMonitoring = bool.Parse(token[1]); break;
-                        case KeyMonitorInterval: if (int.TryParse(token[1], out int mins)) data.MonitorIntervalMinutes = mins; break;
-                        case KeyLanguage: data.Language = token[1]; break;
-                        case KeyIpListColWidths: data.IpListColumnWidths = token[1]; break;
-                        case KeyIpRangeColWidths: data.IpRangeColumnWidths = token[1]; break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    OnError?.Invoke("setting.ini 파싱 실패(줄 건너뜀): " + ex.Message);
-                }
+                var doc = JsonSerializer.Deserialize<SettingsDocument>(File.ReadAllText(path, Encoding.UTF8), JsonOptions);
+                if (doc == null) return null;
+                doc.Settings ??= new AppSettingsData();
+                doc.ScanRanges ??= new List<ScanRangeInfo>();
+                if (doc.Settings.HourEnabled == null || doc.Settings.HourEnabled.Length != 24)
+                    doc.Settings.HourEnabled = NormalizeHours(doc.Settings.HourEnabled);
+                return doc;
             }
+            catch (Exception ex)
+            {
+                OnError?.Invoke(string.Format(Localization.T("msg.store.loadfailed"), SettingsFileName, ex.Message));
+                // 깨진 파일은 덮어쓰지 않도록 백업해 둔다.
+                try { File.Copy(path, path + ".corrupt", overwrite: true); } catch { }
+                return null;
+            }
+        }
 
-            return data;
+        private static bool[] NormalizeHours(bool[]? hours)
+        {
+            var result = new bool[24];
+            if (hours != null) Array.Copy(hours, result, Math.Min(24, hours.Length));
+            return result;
+        }
+
+        private static void LoadSecrets(AppSettingsData data)
+        {
+            try
+            {
+                data.Upload.Password = SecretStore.Get(UploadPasswordKey) ?? "";
+                data.Upload.BearerToken = SecretStore.Get(UploadTokenKey) ?? "";
+                data.Notifications.SmtpPassword = SecretStore.Get(SmtpPasswordKey) ?? "";
+            }
+            catch (Exception ex)
+            {
+                OnError?.Invoke(string.Format(Localization.T("msg.store.loadfailed"), "secrets", ex.Message));
+            }
+        }
+
+        private static void SaveSecrets(AppSettingsData data)
+        {
+            SaveSecret(UploadPasswordKey, data.Upload.Password);
+            SaveSecret(UploadTokenKey, data.Upload.BearerToken);
+            SaveSecret(SmtpPasswordKey, data.Notifications.SmtpPassword);
+        }
+
+        private static void SaveSecret(string key, string? value)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(value)) SecretStore.Remove(key);
+                else if (!SecretStore.TrySet(key, value))
+                    OnError?.Invoke(string.Format(Localization.T("msg.store.savefailed"), "secret:" + key, SecretStore.Name));
+            }
+            catch (Exception ex)
+            {
+                OnError?.Invoke(string.Format(Localization.T("msg.store.savefailed"), "secret:" + key, ex.Message));
+            }
+        }
+
+        public static void SaveSettings(AppSettingsData data)
+        {
+            lock (Lock)
+            {
+                SettingsDocument doc = ReadDocument() ?? new SettingsDocument();
+                doc.Settings = data;
+                WriteDocument(doc);
+                SaveSecrets(data);
+            }
+        }
+
+        private static void WriteDocument(SettingsDocument doc)
+        {
+            try
+            {
+                doc.SchemaVersion = CurrentSchemaVersion;
+                string path = SettingsPath;
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                string tmp = path + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(doc, JsonOptions), new UTF8Encoding(false));
+                File.Move(tmp, path, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                OnError?.Invoke(string.Format(Localization.T("msg.store.savefailed"), SettingsFileName, ex.Message));
+            }
         }
 
         // 컬럼 너비만 갱신해 저장한다. 디스크의 기존 설정을 읽어 이 두 필드만 바꾸므로,
         // 사용자가 설정 화면에서 저장하지 않은 편집 내용을 덮어쓰지 않는다(창 종료 시 호출).
         public static void SaveColumnLayout(string ipListWidths, string ipRangeWidths)
         {
-            AppSettingsData data = LoadSettings();
-            data.IpListColumnWidths = ipListWidths;
-            data.IpRangeColumnWidths = ipRangeWidths;
-            SaveSettings(data);
-        }
-
-        public static void SaveSettings(AppSettingsData data)
-        {
-            try
+            lock (Lock)
             {
-                var lines = new List<string> { $"{KeyUseScheduling}={data.UseScheduling}" };
-
-                for (int label = 1; label <= 24; label++)
-                {
-                    lines.Add($"{HourKey(label)}={data.HourEnabled[label - 1]}");
-                }
-
-                lines.Add($"{KeyUseFTP}={data.UseFTP}");
-                lines.Add($"{KeyFTPIP}={data.FtpIp}");
-                lines.Add($"{KeyFTPID}={data.FtpId}");
-                lines.Add($"{KeyFTPPW}={CredentialProtector.Protect(data.FtpPassword)}");
-                lines.Add($"{KeyFTPPORT}={data.FtpPort}");
-                lines.Add($"{KeySystemName}={data.SystemName}");
-                lines.Add($"{KeyPortList}={data.PortList}");
-                lines.Add($"{KeyUsePortChecking}={data.UsePortChecking}");
-                lines.Add($"{KeyLoadLatestFile}={data.LoadLatestFileOnStartup}");
-                lines.Add($"{KeyContinuousMonitoring}={data.ContinuousMonitoring}");
-                lines.Add($"{KeyMonitorInterval}={data.MonitorIntervalMinutes}");
-                lines.Add($"{KeyLanguage}={data.Language}");
-                lines.Add($"{KeyIpListColWidths}={data.IpListColumnWidths}");
-                lines.Add($"{KeyIpRangeColWidths}={data.IpRangeColumnWidths}");
-
-                File.WriteAllLines(UserDataPaths.Resolve(SettingFileName), lines, Encoding.UTF8);
-            }
-            catch (Exception ex)
-            {
-                OnError?.Invoke("setting.ini 저장 실패: " + ex.Message);
+                SettingsDocument doc = ReadDocument() ?? new SettingsDocument();
+                doc.Settings.IpListColumnWidths = ipListWidths;
+                doc.Settings.IpRangeColumnWidths = ipRangeWidths;
+                WriteDocument(doc);
             }
         }
 
         public static ScanRangeList LoadScanRanges()
         {
             var ranges = new ScanRangeList();
-            string filename = UserDataPaths.Resolve(IPRangeFileName);
+            SettingsDocument doc;
+            lock (Lock) doc = ReadDocument() ?? MigrateLegacy() ?? new SettingsDocument();
 
-            if (File.Exists(filename))
+            foreach (ScanRangeInfo r in doc.ScanRanges)
             {
-                foreach (string line in File.ReadAllLines(filename))
-                {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    try
-                    {
-                        string[] token = line.Split(',');
-                        if (token.Length < 4) continue;
-
-                        ranges.AddItem(new ScanRangeInfo
-                        {
-                            Index = int.Parse(token[0]),
-                            StartIP = token[1],
-                            EndIP = token[2],
-                            Description = token[3],
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        OnError?.Invoke("iprange.ini 파싱 실패(줄 건너뜀): " + ex.Message);
-                    }
-                }
+                if (r == null || string.IsNullOrWhiteSpace(r.StartIP) || string.IsNullOrWhiteSpace(r.EndIP)) continue;
+                ranges.AddItem(r);
             }
 
-            // 설정된 대역이 하나도 없으면(최초 실행이거나, 파일은 있지만 전부 지워진 경우) 이 PC가
-            // 속한 로컬 서브넷을 기본값으로 채워 넣어, 스캔 화면을 처음 열어도 바로 사용할 수 있게 한다.
+            // 설정된 대역이 하나도 없으면(최초 실행이거나 전부 지워진 경우) 이 PC가 속한 로컬 서브넷을 기본값으로 채워
+            // 스캔 화면을 처음 열어도 바로 사용할 수 있게 한다.
             if (ranges.Count == 0)
             {
                 ScanRangeInfo? localRange = LocalNetworkInfo.GetLocalSubnetRange();
-                if (localRange != null)
-                {
-                    ranges.AddItem(localRange);
-                }
-
+                if (localRange != null) ranges.AddItem(localRange);
                 SaveScanRanges(ranges);
             }
 
@@ -186,19 +199,121 @@ namespace NetworkScanner
 
         public static void SaveScanRanges(ScanRangeList ranges)
         {
-            try
+            lock (Lock)
             {
-                var lines = new List<string>();
-                foreach (var info in ranges)
+                SettingsDocument doc = ReadDocument() ?? new SettingsDocument();
+                doc.ScanRanges = new List<ScanRangeInfo>(ranges);
+                WriteDocument(doc);
+            }
+        }
+
+        // ---------------------------------------------------------------- 레거시 ini 변환
+
+        private static SettingsDocument? MigrateLegacy()
+        {
+            string iniPath = UserDataPaths.Resolve(SettingFileName);
+            string rangePath = UserDataPaths.Resolve(IPRangeFileName);
+            if (!File.Exists(iniPath) && !File.Exists(rangePath)) return null;
+
+            var doc = new SettingsDocument();
+            if (File.Exists(iniPath))
+            {
+                try
                 {
-                    lines.Add($"{info.Index},{info.StartIP},{info.EndIP},{info.Description}");
+                    string? storedPassword = null;
+                    foreach (string rawLine in File.ReadAllLines(iniPath))
+                    {
+                        if (string.IsNullOrWhiteSpace(rawLine)) continue;
+                        string[] token = rawLine.Split('=', 2);
+                        if (token.Length < 2) continue;
+                        ApplyLegacyKey(doc.Settings, token[0].Trim(), token[1].Trim(), ref storedPassword);
+                    }
+                    MigrateLegacyPassword(doc.Settings, storedPassword);
                 }
-                File.WriteAllLines(UserDataPaths.Resolve(IPRangeFileName), lines, Encoding.UTF8);
+                catch (Exception ex)
+                {
+                    OnError?.Invoke(string.Format(Localization.T("msg.store.loadfailed"), SettingFileName, ex.Message));
+                }
             }
-            catch (Exception ex)
+
+            if (File.Exists(rangePath))
             {
-                OnError?.Invoke("iprange.ini 저장 실패: " + ex.Message);
+                try
+                {
+                    foreach (string line in File.ReadAllLines(rangePath))
+                    {
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        string[] token = line.Split(',', 4);
+                        if (token.Length < 3) continue;
+                        doc.ScanRanges.Add(new ScanRangeInfo
+                        {
+                            Index = int.TryParse(token[0], out int idx) ? idx : 0,
+                            StartIP = token[1],
+                            EndIP = token[2],
+                            Description = token.Length > 3 ? token[3] : "",
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    OnError?.Invoke(string.Format(Localization.T("msg.store.loadfailed"), IPRangeFileName, ex.Message));
+                }
             }
+
+            WriteDocument(doc);
+            SaveSecrets(doc.Settings);
+            // 변환이 끝난 레거시 파일은 이름을 바꿔 두 번 변환되지 않게 한다(삭제하지 않아 되돌릴 수 있다).
+            TryRename(iniPath);
+            TryRename(rangePath);
+            return doc;
+        }
+
+        private static void ApplyLegacyKey(AppSettingsData d, string key, string value, ref string? storedPassword)
+        {
+            if (key.Length == 4 && key.StartsWith("hr", StringComparison.Ordinal) && int.TryParse(key.AsSpan(2), out int hour) && hour is >= 1 and <= 24)
+            {
+                d.HourEnabled[hour - 1] = ParseBool(value);
+                return;
+            }
+
+            switch (key)
+            {
+                case "usescheuling": case "usescheduling": d.UseScheduling = ParseBool(value); break;
+                case "useftp": d.Upload.Enabled = ParseBool(value); break;
+                case "ftpip": d.Upload.Host = value; break;
+                case "ftpid": d.Upload.User = value; break;
+                case "ftppw": storedPassword = value; break;
+                case "ftpport": d.Upload.Port = int.TryParse(value, out int p) ? p : 0; break;
+                case "systemname": d.SystemName = value; break;
+                case "portlist": d.PortList = value; break;
+                case "useportchecking": d.UsePortChecking = ParseBool(value); break;
+                case "loadlastestfile": case "loadlatestfile": d.LoadLatestFileOnStartup = ParseBool(value); break;
+                case "continuousmonitoring": d.ContinuousMonitoring = ParseBool(value); break;
+                case "monitorintervalminutes": if (int.TryParse(value, out int mins)) d.MonitorIntervalMinutes = mins; break;
+                case "language": d.Language = value; break;
+                case "iplistcolwidths": d.IpListColumnWidths = value; break;
+                case "iprangecolwidths": d.IpRangeColumnWidths = value; break;
+            }
+        }
+
+        // 이전 버전은 평문 FTP만 지원했으므로, 동작이 끊기지 않도록 FTP+허용으로 옮기고 FTPS 전환을 권고한다.
+        private static void MigrateLegacyPassword(AppSettingsData d, string? storedPassword)
+        {
+            d.Upload.Protocol = UploadProtocol.Ftp;
+            d.Upload.AllowInsecure = d.Upload.Enabled;
+
+            if (string.IsNullOrEmpty(storedPassword)) return;
+            string? plain = LegacyCredentialFormat.IsKeychainMarker(storedPassword)
+                ? SecretStore.Get(LegacyCredentialFormat.LegacyKey)
+                : LegacyCredentialFormat.TryDecodeLegacy(storedPassword);
+            if (!string.IsNullOrEmpty(plain)) d.Upload.Password = plain;
+        }
+
+        private static bool ParseBool(string value) => bool.TryParse(value, out bool b) && b;
+
+        private static void TryRename(string path)
+        {
+            try { if (File.Exists(path)) File.Move(path, path + ".migrated", overwrite: true); } catch { }
         }
     }
 }

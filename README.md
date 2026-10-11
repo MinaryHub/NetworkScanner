@@ -1,175 +1,156 @@
 # NetworkScanner
 
-A desktop application that scans a given IP range to check each host's liveness (Ping), open TCP ports, MAC address / vendor, and hostname, then saves the results to CSV and optionally uploads them via FTP. It also flags suspicious open ports by matching them against known reserved and backdoor (trojan) port lists, and can run scans automatically on an hourly schedule.
+A cross-platform network inventory and security scanner. It pings an IP range, records each live host's open TCP ports, MAC address / vendor, host name and service banner, flags ports commonly used by backdoors, detects changes between scans (new/offline hosts, MAC changes, newly opened or risky ports), keeps a local scan history, and can save, upload and alert on the results on a schedule.
 
-It ships two UIs — a Windows-only **WPF** build and a cross-platform **Avalonia** build (Windows / macOS / Linux) — both sharing the same `NetworkScanner.Core` scan engine. The UI is available in **English (default) and Korean**, selectable in Settings.
+It ships as:
+
+| Front-end | Binary | Platforms |
+|---|---|---|
+| GUI ([Avalonia](https://avaloniaui.net)) | `NetworkScanner.Avalonia` | Windows x64/arm64, macOS arm64/x64, Linux x64/arm64 |
+| CLI | `netscan` | same, plus a Docker image |
+| Headless scheduler | `netscan-service` | Windows Service, systemd, launchd, foreground |
+
+All three share one engine, `NetworkScanner.Core`. The UI is available in English (default) and Korean; the in-app user guide also has Japanese and Chinese.
 
 ## Download
 
-To try it without building, grab the file for your OS from the **[Releases page](../../releases/latest)**.
+Grab the file for your OS from the **[Releases page](../../releases/latest)**.
 
-| OS | File |
-|---|---|
-| Windows | `NetworkScanner-win-Setup.exe` (installer) or `NetworkScanner-win-Portable.zip` (unzip and run) |
-| macOS | `NetworkScanner-osx-Setup.pkg` (installer) or `NetworkScanner-osx-Portable.zip` (unzip and run the `.app`) |
-| Linux | `NetworkScanner.AppImage` — make it executable (`chmod +x NetworkScanner.AppImage`) and run |
-| CLI (headless) | `netscan-<version>-linux-x64.tar.gz`, `…-osx-arm64.tar.gz`, `…-win-x64.zip` — a command-line scanner for servers/SSH/automation (see [Command-line interface](#command-line-interface-netscan)) |
+| OS | GUI | Headless (CLI + service) |
+|---|---|---|
+| Windows x64 / arm64 | `NetworkScanner-win-Setup.exe` / `NetworkScanner-win-arm64-Setup.exe` (or the `-Portable.zip`) | `netscan-<ver>-win-x64.zip`, `…-win-arm64.zip` |
+| macOS Apple Silicon / Intel | `NetworkScanner-osx-Setup.pkg` / `NetworkScanner-osx-x64-Setup.pkg` | `netscan-<ver>-osx-arm64.tar.gz`, `…-osx-x64.tar.gz` |
+| Linux x64 / arm64 | `NetworkScanner-linux.AppImage` / `NetworkScanner-linux-arm64.AppImage` | `netscan-<ver>-linux-x64.tar.gz`, `…-linux-arm64.tar.gz` |
+| Docker | — | `ghcr.io/<owner>/netscan:<ver>` |
 
-The `*.nupkg`, `RELEASES*`, `assets.*.json`, and `releases.*.json` files you may also see in the Release assets are internal files for Velopack's auto-update feed — you don't need to download them.
+The `*.nupkg`, `RELEASES*`, `assets.*.json` and `releases.*.json` files are Velopack's auto-update feed; you don't need them.
 
-New versions are published by pushing a `v*.*.*` git tag: `.github/workflows/release.yml` packages the app on each of the three OSes and attaches the installers to a Release automatically.
-
-## Table of contents
-
-- [Features](#features)
-- [Project structure](#project-structure)
-- [Requirements](#requirements)
-- [Build and run](#build-and-run)
-- [Tests](#tests)
-- [Command-line interface (netscan)](#command-line-interface-netscan)
-- [Packaging for distribution](#packaging-for-distribution)
-- [Runtime configuration / data files](#runtime-configuration--data-files)
-- [Known limitations (cross-platform)](#known-limitations-cross-platform)
+> Installers are unsigned unless the repository owner has configured code-signing secrets (see [Releases](#releases)). Unsigned builds trigger Gatekeeper / SmartScreen warnings and occasional antivirus false positives; see [Known limitations](#known-limitations).
 
 ## Features
 
-- Scan a specified IP range: liveness (Ping), round-trip time, open ports, MAC address / vendor, and hostname
-- Parallel host discovery with a TCP fallback for hosts that block ICMP
-- Reserved-port and risky (backdoor) port matching
-- Service/banner identification, OS-family guess (from TTL), and vendor-based device classification
-- Change detection between scans (new/offline hosts, MAC changes, newly opened ports, risky ports) with security alerts
-- Save/load results to CSV, HTML/JSON report export, and FTP upload
-- Hourly scheduling and a continuous-monitoring mode (rescan every N minutes)
-- CIDR range input, per-column sort, search/alive-only filter, and Wake-on-LAN
-- English / Korean UI (default English)
+- Two-phase range scan: parallel ping sweep with TCP fallback for hosts that block ICMP, then per-host enrichment (MAC/vendor, reverse DNS, open ports, service banner, OS guess from TTL, device-type guess)
+- Native ARP table lookup on every OS (no `arp` command required)
+- Reserved-port and risky (backdoor/trojan) port matching
+- Change detection between scans with security alerts; the previous scan is remembered across restarts
+- SQLite scan history: past scans, per-host timeline, device inventory with first/last seen
+- CSV (RFC 4180) save/load, HTML/JSON reports
+- Result upload over **FTPS**, **SFTP** or **HTTPS** with certificate / host-key fingerprint pinning and an automatic retry outbox
+- Notifications on detected changes: webhook (Slack/Teams/Discord…), syslog, SMTP
+- Hourly scheduling and continuous monitoring, in the GUI or as a background service
+- Secrets stored in the OS credential store (DPAPI / Keychain / libsecret) or an AES-256-GCM encrypted file — never in plain text
+- CIDR range input, per-column sort, search / alive-only filter, Wake-on-LAN, in-app updates
 
 ## Project structure
 
-| Project | Description |
+| Path | Description |
 |---|---|
-| `NetworkScanner/` | WPF UI (**Windows only**) |
-| `NetworkScanner.Avalonia/` | Avalonia UI (**cross-platform: Windows / macOS / Linux**) |
-| `NetworkScanner.Core/` | Shared, UI-independent logic library (`net8.0`, platform-agnostic) |
-| `NetworkScanner.Tests/` | xUnit unit tests for `NetworkScanner.Core` |
-| `OUIConvertor/` | Standalone utility that converts the raw IEEE OUI (vendor) text into `ouiinfo.ini` (WPF, Windows only, run separately) |
-| `SetupNetworkScanner/` | Legacy Visual Studio installer project (.vdproj) for the WPF build |
+| `NetworkScanner.Core/` | Engine and all shared logic (`net10.0`, no UI dependency) |
+| `NetworkScanner.Avalonia/` | GUI |
+| `NetworkScanner.Cli/` | `netscan` command-line front-end |
+| `NetworkScanner.Service/` | `netscan-service` headless scheduler (Microsoft.Extensions.Hosting worker) |
+| `NetworkScanner.Tests/` | xUnit tests for Core (run on every OS, no real network needed) |
+| `data/` | Bundled reference data: `ouiinfo.ini` (IEEE OUI registry), `reservedports.ini`, `prohibitports.ini` |
+| `assets/` | App icon and toolbar images |
+| `deploy/` | systemd unit, launchd plist, Windows service installer script, Dockerfile |
+| `tools/update-oui.sh` | Refreshes `data/ouiinfo.ini` from IEEE |
 
-`NetworkScanner.Core` owns: the scan engine (`ScanEngine`), IP-range math (`IPRangeUtil`), settings load/save (`AppSettingsStore`), FTP upload (`FTPService`, FluentFTP-based), OUI/vendor lookup (`OUIInfo`), ARP lookup (`ArpResolver`), reference-port loading (`PortReferenceLoader`), cross-platform logging (`AppLogger`), credential protection (`CredentialProtector`), and localization (`Localization`).
-
-### Why Core is a separate project
-
-The WPF project (`UseWPF=true`) depends on the Windows Desktop runtime, so anything that references it can only run on Windows. Extracting the UI-independent parts (scan logic, settings persistence, reference-port loading, etc.) into `NetworkScanner.Core` means:
-
-- unit tests run on any OS,
-- both the WPF and Avalonia UIs share the same `ScanEngine` without duplicating logic,
-- and platform-specific pieces — ARP lookup (`ArpResolver`), logging (`AppLogger`), credential protection (`CredentialProtector`) — handle the Windows/macOS/Linux branching internally, so neither UI needs its own code.
+Inside Core: `ScanEngine` (scan flow), `ScanServices` (pluggable `IPinger` / `IPortProber` / `IArpResolver` / `IHostNameResolver` / uploader / history), `Platform/` (native ARP readers), `Secrets/` (credential stores), `Upload/` (FTPS/SFTP/HTTPS + outbox), `History/` (SQLite), `Notifications/`, `AppSettingsStore` (`settings.json`), `CsvCodec`, `Localization`.
 
 ## Requirements
 
-- .NET 8 SDK
-- `NetworkScanner` (WPF) and `SetupNetworkScanner` (vdproj) **build/run on Windows only**.
-- `NetworkScanner.Avalonia`, `NetworkScanner.Core`, and `NetworkScanner.Tests` build and run on Windows / macOS / Linux.
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) to build. Release packages are self-contained and need no runtime.
+- Every project builds and runs on Windows, macOS and Linux; CI verifies all three.
 
 ## Build and run
 
 ```bash
-# Build the whole solution (Windows — includes WPF)
-dotnet build NetworkScanner.sln
-
-# On macOS/Linux, to compile-check the whole solution including the WPF project
-# (compile only — the WPF app cannot run there)
-dotnet build NetworkScanner.sln -p:EnableWindowsTargeting=true
-
-# Run the Avalonia app (Windows / macOS / Linux)
-cd NetworkScanner.Avalonia
-dotnet run
-```
-
-## Tests
-
-```bash
+dotnet build NetworkScanner.sln                        # whole solution, any OS
+dotnet run --project NetworkScanner.Avalonia           # GUI
+dotnet run --project NetworkScanner.Cli -- --help      # CLI
+dotnet run --project NetworkScanner.Service -- --run-once
 dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj
 ```
 
-The tests reference only `NetworkScanner.Core`, so they run on non-Windows environments too.
+## Command-line interface (`netscan`)
 
-## Command-line interface (netscan)
+```
+netscan [options]                                         scan
+netscan history [scans|inventory|host <ip>|prune <days>]  query the local history database
 
-`NetworkScanner.Cli` is a headless, cross-platform console front-end (`netscan`) over the same `NetworkScanner.Core` engine — for servers, SSH sessions, cron jobs, and pipelines where no GUI is available. Progress is written to stderr and final results to stdout, so JSON output is safe to pipe.
-
-```bash
-# From source
-dotnet run --project NetworkScanner.Cli -- --range 192.168.1.0/24 --ports 22,80,443
-
-# Or the released single-file binary
-./netscan --range 10.0.0.0/24 -o json --out scan.json
-./netscan            # scan the auto-detected local subnet, table output
+--range <CIDR|start-end|ip>   Range to scan (repeatable). Default: saved settings or the local subnet
+--ports <list>                Ports to check, e.g. 22,80,443 (omit to skip port scanning)
+--use-settings                Use the GUI's settings.json (ranges, ports, limits, language)
+--upload / --notify           Upload results / send notifications with the saved settings
+--scheduled                   Save CSV + HTML report like a scheduled scan (for cron)
+-o table|json|csv|html        Output format; --out <file> writes it to a file
+--parallelism <1-512>, --system-name <name>, --lang en|ko, --no-history, -q
 ```
 
-Key options: `--range <CIDR|start-end|ip>` (repeatable; defaults to the local subnet), `--ports 22,80,443`, `-o table|json|csv`, `--out <file>`, `--lang en|ko`, `-q`. Run `netscan --help` for the full list. The same vendor/OS/service detection and reserved/backdoor-port matching as the GUI are applied.
-
-## Packaging for distribution
-
-### Single self-contained executable (Avalonia)
+Progress goes to stderr, results to stdout (safe to pipe). Exit code 3 means the scan succeeded but risky ports were found.
 
 ```bash
-dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj -c Release -r win-x64   --self-contained true
-dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj -c Release -r osx-arm64 --self-contained true
-dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj -c Release -r linux-x64 --self-contained true
+netscan --range 192.168.1.0/24 --ports 22,80,443 -o json --out scan.json
+netscan --use-settings --scheduled --upload --notify -q      # cron / task-scheduler style run
+netscan history inventory
+docker run --rm --net=host --cap-add=NET_RAW ghcr.io/<owner>/netscan --range 10.0.0.0/24
 ```
 
-### Installer packages ([Velopack](https://velopack.io))
+## Headless scheduler (`netscan-service`)
 
-The `vpk` CLI wraps the publish output into per-OS installers (a setup `.exe` on Windows, `.app`/`.pkg`/`.zip` on macOS, an AppImage-family package on Linux). `vpk` can only build a package **for the OS it runs on** (no cross-packaging), so each package must be built on its own OS — the commands below were used on macOS to produce and verify the real `.app`/`.pkg`.
+`netscan-service` reads the same `settings.json` as the GUI and runs the configured hourly schedule or continuous monitoring without a window — saving reports, uploading, notifying and recording history. If the machine was asleep at the top of the hour the scan still runs later in that hour. Install it with the files in [`deploy/`](deploy/README.md):
 
-```bash
-dotnet tool install -g vpk   # once
-export PATH="$PATH:$HOME/.dotnet/tools"
-
-dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj -c Release -r osx-arm64 --self-contained true -o publish/osx-arm64
-
-vpk pack --packId NetworkScanner --packVersion 1.0.0 \
-  --packDir publish/osx-arm64 --mainExe NetworkScanner.Avalonia \
-  --packTitle "Network Scanner" --packAuthors SMIC \
-  --runtime osx-arm64 --outputDir release-packages/osx-arm64
-```
-
-On Windows, add `--mainExe NetworkScanner.Avalonia.exe` and `--icon NetworkScanner/img/Kyo-Tux-Delikate-Network.ico` to produce an installer with the app icon.
-
-There are two CI workflows with different purposes:
-
-- `.github/workflows/build-and-test.yml` — on every push/PR, verifies that tests, build, and packaging still succeed and stores the output as workflow artifacts (expire after 90 days, GitHub sign-in required).
-- `.github/workflows/release.yml` — on a `v*.*.*` tag push, runs publish + `vpk pack` on the Windows/macOS/Linux runners and attaches the resulting installers to the [Releases page](../../releases) so anyone can download them directly.
-
-The WPF build's legacy `.vdproj` (`SetupNetworkScanner/`) is kept as-is, but new distribution should use the Avalonia build + Velopack packages.
+- Linux: `deploy/netscan.service` (systemd; grants `CAP_NET_RAW` so ping works without root)
+- macOS: `deploy/kr.smic.netscan.plist` (launchd agent)
+- Windows: `deploy/install-windows-service.ps1`
+- Anywhere: `netscan-service --run-once` from cron / Task Scheduler
 
 ## Runtime configuration / data files
 
-The following files live in the application's working directory (some are created automatically on first run).
+User data lives in a per-user folder that survives updates: `%APPDATA%\NetworkScanner` on Windows, `~/Library/Application Support/NetworkScanner` on macOS, `~/.config/NetworkScanner` on Linux. (Data an older macOS build left in `~/.config/NetworkScanner` is copied over on first start.)
 
 | File | Purpose |
 |---|---|
-| `iprange.ini` | List of IP ranges to scan (auto-seeded with the local subnet on first run) |
-| `setting.ini` | Settings: FTP account (password stored encrypted — DPAPI on Windows, Keychain on macOS, libsecret on Linux), schedule hours, port list, language, etc. |
-| `annotations.ini` | User-entered name/note per IP, re-applied on later scans |
-| `reservedports.ini` | Reference list of reserved (well-known) ports |
-| `prohibitports.ini` | List of risky ports known to be used by backdoors/trojans |
-| `ouiinfo.ini` | MAC OUI → vendor mapping (IEEE public data converted via `OUIConvertor`) |
+| `settings.json` | All settings and scan ranges (schema v2). Old `setting.ini` / `iprange.ini` are migrated once and renamed `*.migrated`. |
+| `secrets/` | Encrypted-file secret store (used when no OS credential store is available). Passwords/tokens are never written to `settings.json`. |
+| `history.db` | SQLite scan history and inventory |
+| `env/` | Saved CSV results and HTML reports |
+| `outbox/` | Uploads waiting to be retried |
+| `logs/` | Daily log files (14 days kept) |
+| `annotations.ini`, `known_hosts` | Per-IP names/notes; pinned SFTP host keys |
 
-`NetworkScanner.Avalonia` links the three reference-data files (`ouiinfo.ini` / `reservedports.ini` / `prohibitports.ini`) and the icon images directly from the `NetworkScanner/` project at build time (no duplicate copies). The bundled reference files are resolved next to the executable, so the app finds them regardless of the current working directory.
+The bundled reference files (`ouiinfo.ini`, `reservedports.ini`, `prohibitports.ini`) are resolved next to the executable.
 
-## Known limitations (cross-platform)
+## Upload and notifications
 
-- **ARP (MAC address) lookup**: uses the `SendARP` API on Windows and parses the system `arp` command output on macOS/Linux. On Unix-like systems the lookup only works after the ARP cache has been populated by a ping to that IP (the scan always pings first, so normal use is fine).
-- **FTP password protection**: stored in the OS credential store — DPAPI on Windows, Keychain (`security`) on macOS, libsecret (`secret-tool`) on Linux. Where those tools are unavailable (e.g. `secret-tool` not installed on Linux), it falls back to simple Base64 obfuscation and logs a warning.
-- **ICMP Ping permission**: depending on the Linux/macOS setup, ICMP ping may be restricted for a normal user. When a permission problem is detected, the affected host is treated as no-response (Timeout) and a guidance message is logged once so the scan is not interrupted. If needed:
-  - Linux: grant just the ping capability with `sudo setcap cap_net_raw+ep <path-to-executable>`, or run with `sudo`
-  - macOS: usually works without extra permissions; if restricted, run with `sudo`
-- **Unsigned installer warnings (macOS/Windows)**: the Release installers are not yet Apple/Microsoft code-signed or notarized (each requires a paid developer certificate). The following OS warnings on first launch are therefore expected and do **not** indicate malware.
-  - **macOS**: if you see `"NetworkScanner-osx-Setup.pkg" can't be opened`, **right-click (Control-click) → Open** in Finder, then **Open** again in the dialog. Alternatively run `xattr -d com.apple.quarantine NetworkScanner-osx-Setup.pkg` in Terminal, then open it.
-  - **Windows**: if the "Windows protected your PC" (SmartScreen) screen appears, click **More info** → **Run anyway**.
-- **Antivirus false positive (e.g. AhnLab V3) — installer quarantined/deleted**: because the unsigned installer bundles an auto-update mechanism (Velopack), some antivirus products mistake it for a suspicious pattern and quarantine it without scanning. It is not actual malware; you can:
-  - restore the file from V3's quarantine and add it to the scan exclusions,
-  - download the **Portable (zip)** build (no installer / auto-update behavior), which is less likely to trigger a false positive (see the [Download](#download) table above),
-  - report the false positive through AhnLab's false-positive report page so future builds are recognized correctly.
-  - The real fix is a paid code-signing certificate, which is deferred for now on cost/priority grounds.
+Settings → *Result upload*: choose FTPS (default), implicit FTPS, SFTP, HTTPS, or plain FTP (must be explicitly allowed; shown as insecure). Optionally pin the server's SHA-256 certificate / host-key fingerprint. For SFTP without a pin, the host key is remembered on first contact and any later change is rejected. HTTPS posts a multipart form (`name`, `file`) with a Bearer token to the configured URL.
+
+Failed uploads are copied to `outbox/` and retried with exponential backoff (1 min → 24 h, up to 30 attempts) on every later upload, scheduled scan or service cycle.
+
+Settings → *Notifications*: webhook URL (JSON `{"text": …}`), syslog host/port (UDP, RFC 5424) and/or SMTP. Choose whether to send all changes or only security-relevant ones (MAC changes, risky ports).
+
+## Packaging for distribution
+
+```bash
+dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj -c Release -r osx-arm64 --self-contained true -o publish/osx-arm64
+dotnet tool install -g vpk
+vpk pack --packId NetworkScanner --packVersion 2.0.0 --packDir publish/osx-arm64 --mainExe NetworkScanner.Avalonia \
+  --packTitle "Network Scanner" --packAuthors SMIC --runtime osx-arm64 --channel osx --outputDir release-packages/osx-arm64
+```
+
+`vpk` packages only for the OS it runs on. On Windows add `--mainExe NetworkScanner.Avalonia.exe --icon assets/app.ico`. Channels: `win`, `win-arm64`, `osx`, `osx-x64`, `linux`, `linux-arm64`.
+
+## Releases
+
+Pushing a `v*.*.*` tag runs `.github/workflows/release.yml`, which builds GUI installers for six RIDs, CLI + service archives, a multi-arch Docker image, and attaches everything to a GitHub Release. If these repository secrets exist the binaries are signed (and notarized on macOS): `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`, `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_KEYCHAIN_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. `build-and-test.yml` runs the tests and the full build on Windows, macOS and Linux for every push, plus a vulnerable-package check and a Docker build.
+
+## Known limitations
+
+- **MAC addresses** are only resolvable inside the scanner's own subnet (ARP). Hosts behind a router show no MAC.
+- **ICMP permission**: on Linux/macOS a normal user may be unable to send raw ICMP. The scan then relies on the TCP liveness fallback and logs a one-time hint. Fix: `sudo setcap cap_net_raw+ep <executable>` (the systemd unit already grants it) or run as root.
+- **Unsigned installer warnings** when no signing secrets are configured: macOS → right-click → Open (or `xattr -d com.apple.quarantine <file>`); Windows SmartScreen → *More info → Run anyway*. Some antivirus products quarantine unsigned Velopack installers; use the Portable zip or whitelist it.
+- IPv4 only.
+
+## License
+
+See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for bundled components. The license for NetworkScanner itself is defined by the repository owner (`LICENSE`).

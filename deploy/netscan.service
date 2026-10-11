@@ -1,0 +1,28 @@
+# systemd 유닛 — NetworkScanner 헤드리스 스케줄러.
+#   sudo cp netscan.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl enable --now netscan
+# 설정은 실행 사용자의 ~/.config/NetworkScanner/settings.json (GUI 또는 CLI --use-settings와 동일).
+# ICMP 권한: AmbientCapabilities=CAP_NET_RAW 로 setcap 없이 Ping이 가능하다.
+[Unit]
+Description=NetworkScanner scheduled network scanner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/opt/netscan/netscan-service
+User=netscan
+Group=netscan
+Restart=on-failure
+RestartSec=10
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/netscan/.config
+PrivateTmp=true
+Environment=DOTNET_gcServer=0
+
+[Install]
+WantedBy=multi-user.target

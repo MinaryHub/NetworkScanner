@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace NetworkScanner
@@ -14,7 +15,7 @@ namespace NetworkScanner
 
         private static string? _root;
 
-        // Windows: %APPDATA%\NetworkScanner, macOS/Linux: ~/.config/NetworkScanner
+        // Windows: %APPDATA%\NetworkScanner, macOS: ~/Library/Application Support/NetworkScanner, Linux: ~/.config/NetworkScanner
         public static string Root => OverrideRoot ?? (_root ??= ResolveRoot());
 
         public static string Resolve(string fileName) => Path.Combine(Root, fileName);
@@ -34,7 +35,13 @@ namespace NetworkScanner
         // 이미 새 위치에 같은 파일이 있으면 건드리지 않는다. 실패해도 앱 동작에는 지장 없다(최선 노력).
         private static void MigrateLegacyFiles(string root)
         {
-            string[] candidates = { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
+            var candidates = new List<string> { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
+            // macOS: .NET 8 시절 ApplicationData는 ~/.config 이었고 .NET 10부터 ~/Library/Application Support 로 바뀌었다.
+            // 이전 버전이 남긴 ~/.config/NetworkScanner 도 이관 후보에 넣는다.
+            if (OperatingSystem.IsMacOS())
+            {
+                candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "NetworkScanner"));
+            }
             string[] files =
             {
                 AppSettingsStore.SettingFileName,
@@ -54,6 +61,25 @@ namespace NetworkScanner
                         string legacy = Path.Combine(dir, name);
                         string target = Path.Combine(root, name);
                         if (File.Exists(legacy) && !File.Exists(target)) File.Copy(legacy, target);
+                    }
+
+                    // 새 형식(settings.json, history.db)은 이전 OS별 기본 폴더에서만 옮긴다(작업 디렉터리의 우연한 파일은 무시).
+                    if (OperatingSystem.IsMacOS() && dir.EndsWith(Path.Combine(".config", "NetworkScanner"), StringComparison.Ordinal))
+                    {
+                        foreach (string name in new[] { AppSettingsStore.SettingsFileName, "history.db", "known_hosts" })
+                        {
+                            string legacy = Path.Combine(dir, name);
+                            string target = Path.Combine(root, name);
+                            if (File.Exists(legacy) && !File.Exists(target)) File.Copy(legacy, target);
+                        }
+                        string legacySecrets = Path.Combine(dir, "secrets");
+                        string targetSecrets = Path.Combine(root, "secrets");
+                        if (Directory.Exists(legacySecrets) && !Directory.Exists(targetSecrets))
+                        {
+                            Directory.CreateDirectory(targetSecrets);
+                            foreach (string src in Directory.GetFiles(legacySecrets))
+                                File.Copy(src, Path.Combine(targetSecrets, Path.GetFileName(src)));
+                        }
                     }
 
                     // 스캔 결과 CSV 폴더도 함께 이관한다(시작 시 최근 기록 열기가 계속 동작하도록).

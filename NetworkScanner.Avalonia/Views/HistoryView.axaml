@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:l="clr-namespace:NetworkScanner.Avalonia.Helpers"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             x:Class="NetworkScanner.Avalonia.Views.HistoryView">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,*,Auto" Margin="12">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                <Image Source="avares://NetworkScanner.Avalonia/Assets/iplist.png" Width="28" Height="28" />
+                <TextBlock FontSize="22" FontWeight="Bold" VerticalAlignment="Center" Text="{l:Tr Key=history.title}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Name="BtnRefresh" Click="BtnRefresh_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Image Source="avares://NetworkScanner.Avalonia/Assets/refresh.png" Width="20" Height="20" />
+                        <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=history.refresh}" />
+                    </StackPanel>
+                </Button>
+                <Button Name="BtnPrune" Click="BtnPrune_Click" Content="{l:Tr Key=history.prune}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Grid.Row="1" FontWeight="Bold" Margin="0,0,0,4" Text="{l:Tr Key=history.scans}" />
+        <DataGrid Grid.Row="2" Name="DgScans" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserSortColumns="True" CanUserResizeColumns="True" FontFamily="Cascadia Code,Consolas,monospace">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="{l:Tr Key=history.col.started}" Binding="{Binding Started}" Width="170" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.finished}" Binding="{Binding Finished}" Width="170" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.system}" Binding="{Binding SystemName}" Width="160" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.total}" Binding="{Binding Total}" Width="80" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.alive}" Binding="{Binding Alive}" Width="80" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.prohibited}" Binding="{Binding Prohibited}" Width="80" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.scheduled}" Binding="{Binding Scheduled}" Width="90" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Grid.Row="3" FontWeight="Bold" Margin="0,12,0,4" Text="{l:Tr Key=history.inventory}" />
+        <DataGrid Grid.Row="4" Name="DgInventory" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserSortColumns="True" CanUserResizeColumns="True" FontFamily="Cascadia Code,Consolas,monospace">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="{l:Tr Key=history.col.ip}" Binding="{Binding Ip}" Width="130" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.firstseen}" Binding="{Binding FirstSeen}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.lastseen}" Binding="{Binding LastSeen}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.lastalive}" Binding="{Binding LastAlive}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.name}" Binding="{Binding LastName}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.mac}" Binding="{Binding LastMac}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.vendor}" Binding="{Binding LastVendor}" Width="150" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.ports}" Binding="{Binding LastPorts}" Width="140" />
+                <DataGridTextColumn Header="{l:Tr Key=history.col.seencount}" Binding="{Binding SeenCount}" Width="80" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Grid.Row="5" Name="TbMsg" Margin="0,8,0,0" />
+    </Grid>
+</UserControl>

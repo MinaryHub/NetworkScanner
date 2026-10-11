@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- launchd 에이전트 — 로그인 사용자 컨텍스트에서 NetworkScanner 스케줄러를 상주시킨다.
+     cp kr.smic.netscan.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/kr.smic.netscan.plist
+     /opt/netscan 경로는 설치 위치에 맞게 바꾼다. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>kr.smic.netscan</string>
+  <key>ProgramArguments</key>
+  <array><string>/opt/netscan/netscan-service</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/netscan-service.log</string>
+  <key>StandardErrorPath</key><string>/tmp/netscan-service.err</string>
+</dict>
+</plist>

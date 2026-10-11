@@ -6,7 +6,7 @@ using System.Text;
 namespace NetworkScanner
 {
     // reservedports.ini/prohibitports.ini를 읽어 참조 포트 목록을 만든다.
-    // WPF/Avalonia UI가 공유하며, UI는 반환된 목록을 각자의 리스트 컨트롤에 표시하기만 하면 된다.
+    // GUI/CLI가 공유하며, UI는 반환된 목록을 각자의 리스트 컨트롤에 표시하기만 하면 된다.
     public static class PortReferenceLoader
     {
         public static Action<string>? OnError { get; set; }
@@ -18,7 +18,7 @@ namespace NetworkScanner
 
             try
             {
-                string[] prohibitContents = File.ReadAllLines(DataPaths.Resolve("prohibitports.ini"), Encoding.Default);
+                string[] prohibitContents = File.ReadAllLines(DataPaths.Resolve("prohibitports.ini"), Encoding.UTF8);
                 foreach (string s in prohibitContents)
                 {
                     if (string.IsNullOrWhiteSpace(s)) continue;
@@ -33,12 +33,12 @@ namespace NetworkScanner
             }
             catch (Exception ex)
             {
-                OnError?.Invoke("prohibitports.ini 로드 실패: " + ex.Message);
+                OnError?.Invoke(string.Format(Localization.T("msg.store.loadfailed"), "prohibitports.ini", ex.Message));
             }
 
             try
             {
-                string[] reservedContents = File.ReadAllLines(DataPaths.Resolve("reservedports.ini"), Encoding.Default);
+                string[] reservedContents = File.ReadAllLines(DataPaths.Resolve("reservedports.ini"), Encoding.UTF8);
                 foreach (string s in reservedContents)
                 {
                     if (string.IsNullOrWhiteSpace(s)) continue;
@@ -52,7 +52,7 @@ namespace NetworkScanner
             }
             catch (Exception ex)
             {
-                OnError?.Invoke("reservedports.ini 로드 실패: " + ex.Message);
+                OnError?.Invoke(string.Format(Localization.T("msg.store.loadfailed"), "reservedports.ini", ex.Message));
             }
 
             return (reserved, prohibited);

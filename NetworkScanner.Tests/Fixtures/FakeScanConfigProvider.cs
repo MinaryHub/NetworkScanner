@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using System.Net;
 using NetworkScanner;
+using NetworkScanner.Upload;
 
 namespace NetworkScanner.Tests.Fixtures
 {
@@ -10,14 +10,14 @@ namespace NetworkScanner.Tests.Fixtures
         public List<RefPortInfo> ReservedPortList { get; set; } = new List<RefPortInfo>();
         public List<RefPortInfo> ProhibitPortList { get; set; } = new List<RefPortInfo>();
 
-        public string GetPortList() => "";
-        public IPAddress GetFTPIP() => IPAddress.None;
-        public string GetFTPID() => "";
-        public string GetFTPPW() => "";
-        public int GetFTPPort() => 0;
-        public bool? GetUseFTP() => false;
+        public string PortList { get; set; } = "";
+        public bool UsePortChecking { get; set; }
+
+        public string GetPortList() => PortList;
+        public UploadSettings Upload { get; set; } = new UploadSettings();
+        public UploadSettings GetUploadSettings() => Upload;
         public string GetSystemName() => "TestSystem";
-        public bool? GetUsePortChecking() => false;
+        public bool? GetUsePortChecking() => UsePortChecking;
         public List<RefPortInfo> GetReservedPortList() => ReservedPortList;
         public List<RefPortInfo> GetProhibitPortList() => ProhibitPortList;
         public ScanRangeList GetScanRanges() => ScanRanges;

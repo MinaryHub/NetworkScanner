@@ -60,20 +60,98 @@
                 </StackPanel>
             </Border>
 
+            <!-- 결과 업로드(FTP/FTPS/SFTP/HTTPS). 비밀번호/토큰은 OS 자격 증명 저장소에 따로 보관된다. -->
             <Border BorderBrush="Gray" BorderThickness="1" Padding="8">
                 <StackPanel Spacing="8">
-                    <CheckBox Name="ChkUseFTP" Content="{l:Tr Key=settings.useftp}" FontWeight="Bold" />
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <TextBlock FontWeight="Bold" VerticalAlignment="Center" Text="{l:Tr Key=settings.upload}" />
+                        <CheckBox Name="ChkUseUpload" Content="{l:Tr Key=settings.useupload}" />
+                    </StackPanel>
                     <WrapPanel>
-                        <TextBlock Width="60" VerticalAlignment="Center">Host</TextBlock>
-                        <TextBox Name="TbFTPIP" Width="180" Margin="0,0,12,0" />
-                        <TextBlock Width="40" VerticalAlignment="Center">ID</TextBlock>
-                        <TextBox Name="TbFTPID" Width="140" Margin="0,0,12,0" />
-                        <TextBlock Width="40" VerticalAlignment="Center">PW</TextBlock>
-                        <TextBox Name="TbFTPPW" Width="140" PasswordChar="●" Margin="0,0,12,0" />
-                        <TextBlock Width="50" VerticalAlignment="Center">Port</TextBlock>
-                        <TextBox Name="TbFTPPort" Width="100" />
+                        <TextBlock Width="70" VerticalAlignment="Center" Text="{l:Tr Key=settings.protocol}" />
+                        <ComboBox Name="CmbUploadProtocol" Width="140" Margin="0,0,12,0" SelectionChanged="CmbUploadProtocol_SelectionChanged">
+                            <ComboBoxItem Tag="Ftp">FTP</ComboBoxItem>
+                            <ComboBoxItem Tag="Ftps">FTPS (explicit)</ComboBoxItem>
+                            <ComboBoxItem Tag="FtpsImplicit">FTPS (implicit)</ComboBoxItem>
+                            <ComboBoxItem Tag="Sftp">SFTP</ComboBoxItem>
+                            <ComboBoxItem Tag="Https">HTTPS</ComboBoxItem>
+                        </ComboBox>
+                        <TextBlock Width="60" VerticalAlignment="Center" Text="{l:Tr Key=settings.host}" />
+                        <TextBox Name="TbUploadHost" Width="200" Margin="0,0,12,0" />
+                        <TextBlock Width="50" VerticalAlignment="Center" Text="{l:Tr Key=settings.port}" />
+                        <TextBox Name="TbUploadPort" Width="80" Margin="0,0,4,0" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" Text="{l:Tr Key=settings.port.default}" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="70" VerticalAlignment="Center" Text="{l:Tr Key=settings.user}" />
+                        <TextBox Name="TbUploadUser" Width="140" Margin="0,0,12,0" />
+                        <TextBlock Width="70" VerticalAlignment="Center" Text="{l:Tr Key=settings.password}" />
+                        <TextBox Name="TbUploadPassword" Width="140" PasswordChar="●" Margin="0,0,12,0" />
+                        <TextBlock Width="80" VerticalAlignment="Center" Text="{l:Tr Key=settings.remotedir}" />
+                        <TextBox Name="TbUploadRemoteDir" Width="200" Watermark="/FTP" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="140" VerticalAlignment="Center" Text="{l:Tr Key=settings.fingerprint}" />
+                        <TextBox Name="TbUploadFingerprint" Width="420" Margin="0,0,12,0" Watermark="AB:CD:..." />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="70" VerticalAlignment="Center" Text="{l:Tr Key=settings.token}" />
+                        <TextBox Name="TbUploadToken" Width="360" PasswordChar="●" Margin="0,0,4,0" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.token.https}" />
+                        <CheckBox Name="ChkUploadAllowInsecure" Content="{l:Tr Key=settings.allowinsecure}" />
                     </WrapPanel>
                 </StackPanel>
+            </Border>
+
+            <!-- 알림(웹훅/syslog/메일). 스캔 변화가 감지되면 설정된 채널로 보낸다. -->
+            <Border BorderBrush="Gray" BorderThickness="1" Padding="8">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <TextBlock FontWeight="Bold" VerticalAlignment="Center" Text="{l:Tr Key=settings.notifications}" />
+                        <CheckBox Name="ChkUseNotify" Content="{l:Tr Key=settings.usenotify}" />
+                        <CheckBox Name="ChkNotifySecurityOnly" Content="{l:Tr Key=settings.securityonly}" />
+                    </StackPanel>
+                    <WrapPanel>
+                        <TextBlock Width="100" VerticalAlignment="Center" Text="{l:Tr Key=settings.webhook}" />
+                        <TextBox Name="TbWebhookUrl" Width="460" Watermark="https://hooks.slack.com/services/..." />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="100" VerticalAlignment="Center" Text="{l:Tr Key=settings.syslog}" />
+                        <TextBox Name="TbSyslogHost" Width="200" Margin="0,0,12,0" />
+                        <TextBlock Width="90" VerticalAlignment="Center" Text="{l:Tr Key=settings.syslogport}" />
+                        <TextBox Name="TbSyslogPort" Width="80" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="100" VerticalAlignment="Center" Text="{l:Tr Key=settings.smtp}" />
+                        <TextBox Name="TbSmtpHost" Width="200" Margin="0,0,12,0" />
+                        <TextBlock Width="90" VerticalAlignment="Center" Text="{l:Tr Key=settings.smtpport}" />
+                        <TextBox Name="TbSmtpPort" Width="80" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkSmtpStartTls" Content="{l:Tr Key=settings.starttls}" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="100" VerticalAlignment="Center" Text="{l:Tr Key=settings.smtpuser}" />
+                        <TextBox Name="TbSmtpUser" Width="200" Margin="0,0,12,0" />
+                        <TextBlock Width="110" VerticalAlignment="Center" Text="{l:Tr Key=settings.smtppassword}" />
+                        <TextBox Name="TbSmtpPassword" Width="160" PasswordChar="●" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="100" VerticalAlignment="Center" Text="{l:Tr Key=settings.mailfrom}" />
+                        <TextBox Name="TbMailFrom" Width="200" Margin="0,0,12,0" />
+                        <TextBlock Width="90" VerticalAlignment="Center" Text="{l:Tr Key=settings.mailto}" />
+                        <TextBox Name="TbMailTo" Width="300" Watermark="a@example.com, b@example.com" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 스캔 한계: 동시성과 한 번에 두드릴 최대 주소 수. -->
+            <Border BorderBrush="Gray" BorderThickness="1" Padding="8">
+                <WrapPanel>
+                    <TextBlock FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.scanlimits}" />
+                    <TextBlock Width="90" VerticalAlignment="Center" Text="{l:Tr Key=settings.parallelism}" />
+                    <TextBox Name="TbScanParallelism" Width="80" Margin="0,0,16,0" />
+                    <TextBlock Width="110" VerticalAlignment="Center" Text="{l:Tr Key=settings.maxtargets}" />
+                    <TextBox Name="TbMaxTargets" Width="100" />
+                </WrapPanel>
             </Border>
 
             <Border BorderBrush="Gray" BorderThickness="1" Padding="8">

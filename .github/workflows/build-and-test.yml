@@ -7,30 +7,62 @@ on:
     branches: [ master ]
 
 jobs:
+  # Core 테스트는 OS별 분기 코드(ARP/자격 증명/경로)를 각 OS에서 실제로 검증하기 위해 3개 OS에서 모두 돌린다.
   test:
-    name: Run cross-platform tests (NetworkScanner.Core)
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
       - name: Test
         run: dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --configuration Release
+      # 알려진 취약점이 있는 패키지를 쓰면 실패시킨다.
+      - name: Check vulnerable packages
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dotnet restore NetworkScanner.sln
+          out=$(dotnet list NetworkScanner.sln package --vulnerable --include-transitive 2>&1)
+          echo "$out"
+          if echo "$out" | grep -qi "has the following vulnerable packages"; then exit 1; fi
 
-  build-wpf:
-    name: Build WPF app (Windows-only)
-    runs-on: windows-latest
+  # 솔루션 전체가 어느 OS에서든 빌드되는지 확인한다(Windows 전용 프로젝트는 더 이상 없다).
+  build:
+    name: Build solution (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
       - name: Build
         run: dotnet build NetworkScanner.sln --configuration Release
 
+  docker:
+    name: Docker image builds (CLI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: false
+          tags: netscan:ci
+
   build-avalonia:
-    name: Build, package (Velopack) & publish Avalonia app
+    name: Package (Velopack) Avalonia app
     strategy:
       fail-fast: false
       matrix:
@@ -38,7 +70,7 @@ jobs:
           - os: windows-latest
             rid: win-x64
             mainExe: NetworkScanner.Avalonia.exe
-            icon: NetworkScanner/img/Kyo-Tux-Delikate-Network.ico
+            icon: assets/app.ico
           - os: macos-latest
             rid: osx-arm64
             mainExe: NetworkScanner.Avalonia
@@ -52,7 +84,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
       - name: Publish self-contained (${{ matrix.rid }})
         run: >
           dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj

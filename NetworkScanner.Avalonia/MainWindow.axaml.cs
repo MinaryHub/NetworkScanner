@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using NetworkScanner.Notifications;
+using NetworkScanner.Upload;
 using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -16,8 +19,15 @@ public partial class MainWindow : Window, IScanConfigProvider
     private readonly SettingsView _settingsView = new();
     private readonly RefPortListView _refPortListView = new();
     private readonly UserGuideView _userGuideView = new();
+    private readonly HistoryView _historyView = new();
     private readonly DispatcherTimer _timer = new();
     private readonly UpdateService _updateService = new();
+    private ScanServices? _services;
+
+    // 예약 스캔이 마지막으로 실행된 "시각의 정시"(예: 2026-10-11 14:00). 같은 시간대에 두 번 돌지 않게 한다.
+    private DateTime _lastScheduledHour = DateTime.MinValue;
+    // 예약 스캔이 끝나면 outbox를 한 번 비우도록 표시한다.
+    private bool _flushAfterScan;
 
     public MainWindow()
     {
@@ -28,7 +38,16 @@ public partial class MainWindow : Window, IScanConfigProvider
     {
         AppLogger.LogInfo("NetworkScanner", "프로그램 시작");
 
-        _ipListView.Initialize(this);
+        // 저장해 둔 컬럼 너비 복원, 종료 시 현재 너비 저장.
+        AppSettingsData startup = _settingsView.GetCurrentSettings();
+
+        // 엔진에는 실제 업로드 outbox + SQLite 이력을 연결하고, 동시성/상한은 설정값으로 시작한다.
+        _services = ScanServices.CreateDefault();
+        _ipListView.Initialize(this, _services, ScanOptions.FromSettings(startup));
+        _ipListView.ChangesDetected += OnScanChangesDetected;
+        _ipListView.ScanFinished += OnScanFinished;
+        _settingsView.SettingsSaved += data => _ipListView.ApplyOptions(ScanOptions.FromSettings(data));
+        _historyView.Initialize(_services.History);
         ContentArea.Content = _ipListView;
         SetActiveNav(BtnIPList);
 
@@ -39,8 +58,6 @@ public partial class MainWindow : Window, IScanConfigProvider
         _timer.Tick += Timer_Tick;
         _timer.Start();
 
-        // 저장해 둔 컬럼 너비 복원, 종료 시 현재 너비 저장.
-        AppSettingsData startup = _settingsView.GetCurrentSettings();
         _ipListView.ApplyColumnWidths(startup.IpListColumnWidths);
         _settingsView.ApplyColumnWidths(startup.IpRangeColumnWidths);
 
@@ -56,6 +73,66 @@ public partial class MainWindow : Window, IScanConfigProvider
         }
 
         _ = CheckForUpdatesAsync();
+        _ = FlushOutboxAsync();
+    }
+
+    // 변화 감지 시 설정된 알림 채널(웹훅/syslog/메일)로 보낸다. 실패해도 스캔/UI에는 영향을 주지 않는다.
+    private void OnScanChangesDetected(IReadOnlyList<ScanChange> changes)
+    {
+        AppSettingsData settings = _settingsView.GetCurrentSettings();
+        if (!settings.Notifications.Enabled) return;
+        string systemName = GetSystemName();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                int sent = await new Notifier(settings.Notifications).NotifyChangesAsync(systemName, changes, CancellationToken.None);
+                if (sent > 0) AppLogger.LogInfo("NetworkScanner", string.Format(Localization.T("msg.notify.sent"), sent));
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("NetworkScanner", string.Format(Localization.T("msg.notify.failed"), ex.Message), ex);
+            }
+        });
+    }
+
+    private void OnScanFinished()
+    {
+        UpdateOutboxLabel();
+        if (!_flushAfterScan) return;
+        _flushAfterScan = false;
+        _ = FlushOutboxAsync();
+    }
+
+    // 전송 실패로 outbox에 밀린 결과 파일을 다시 보낸다(시작 시, 예약 스캔 후).
+    private async Task FlushOutboxAsync()
+    {
+        if (_services?.Uploader == null) return;
+        UploadSettings upload = _settingsView.GetCurrentSettings().Upload;
+        if (!upload.Enabled || _services.Uploader.Outbox.Count == 0) { UpdateOutboxLabel(); return; }
+
+        try
+        {
+            int sent = await _services.Uploader.FlushAsync(upload, m => AppLogger.LogInfo("NetworkScanner", m), CancellationToken.None);
+            if (sent > 0) AppLogger.LogInfo("NetworkScanner", string.Format(Localization.T("msg.outbox.flushed"), sent));
+        }
+        catch (Exception ex)
+        {
+            AppLogger.LogError("NetworkScanner", "outbox flush failed", ex);
+        }
+        Dispatcher.UIThread.Post(UpdateOutboxLabel);
+    }
+
+    // 사이드바에 "대기 중 업로드: N"을 표시한다(0이면 숨김).
+    private void UpdateOutboxLabel()
+    {
+        int pending = 0;
+        try { pending = _services?.Uploader?.Outbox.Count ?? 0; }
+        catch (Exception ex) { AppLogger.LogError("NetworkScanner", "outbox count failed", ex); }
+
+        TbOutbox.Text = $"{Localization.T("settings.outbox")}: {pending}";
+        TbOutbox.IsVisible = pending > 0;
     }
 
     // GitHub Releases에서 새 버전을 확인하고, 있으면 사이드바의 업데이트 버튼을 노출한다.
@@ -100,21 +177,29 @@ public partial class MainWindow : Window, IScanConfigProvider
     private void Timer_Tick(object? sender, EventArgs e)
     {
         AppSettingsData settings = _settingsView.GetCurrentSettings();
+        DateTime now = DateTime.Now;
 
         // 연속 모니터링: 지정한 분 간격마다 자동 재스캔(스케줄링과 독립적으로 동작).
         if (settings.ContinuousMonitoring
-            && (DateTime.Now - _lastMonitorScan).TotalMinutes >= settings.MonitorIntervalMinutes
+            && settings.MonitorIntervalMinutes >= 1
+            && (now - _lastMonitorScan).TotalMinutes >= settings.MonitorIntervalMinutes
             && !_ipListView.IsScanning())
         {
-            _lastMonitorScan = DateTime.Now;
+            _lastMonitorScan = now;
             _ipListView.StartScan();
             return;
         }
 
-        if (!_settingsView.IsInScheduleHour(DateTime.Now.Hour)) return;
-        if (DateTime.Now.Minute != 0) return;
+        // 예약 스캔: 켜진 시간대에 아직 그 시간대의 스캔이 돌지 않았으면 실행한다.
+        // "정각(0분)에만" 조건을 두지 않으므로 절전/지연으로 0분 틱을 놓쳐도 그 시간 안에 한 번은 돈다.
+        if (!settings.UseScheduling) return;
+        if (!settings.IsInScheduleHour(now.Hour)) return;
+        DateTime thisHour = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0);
+        if (_lastScheduledHour == thisHour) return;
         if (_ipListView.IsScanning()) return;
 
+        _lastScheduledHour = thisHour;
+        _flushAfterScan = true;
         _ipListView.SchedulingScan();
     }
 
@@ -136,6 +221,13 @@ public partial class MainWindow : Window, IScanConfigProvider
         SetActiveNav(BtnPortInfo);
     }
 
+    private void BtnHistory_Click(object? sender, RoutedEventArgs e)
+    {
+        _historyView.Refresh();
+        ContentArea.Content = _historyView;
+        SetActiveNav(BtnHistory);
+    }
+
     private void BtnGuide_Click(object? sender, RoutedEventArgs e)
     {
         ContentArea.Content = _userGuideView;
@@ -149,7 +241,7 @@ public partial class MainWindow : Window, IScanConfigProvider
         var activeBg = (IBrush)Resources["SideActiveBackgroundBrush"]!;
         var inactiveBg = (IBrush)Resources["SideBackgroundBrush"]!;
 
-        foreach (Button nav in new[] { BtnIPList, BtnSetting, BtnPortInfo, BtnGuide })
+        foreach (Button nav in new[] { BtnIPList, BtnSetting, BtnPortInfo, BtnHistory, BtnGuide })
         {
             bool isActive = ReferenceEquals(nav, active);
             nav.Background = isActive ? activeBg : inactiveBg;
@@ -160,22 +252,7 @@ public partial class MainWindow : Window, IScanConfigProvider
     // IScanConfigProvider 구현 - SettingsView/RefPortListView에 위임한다.
     public string GetPortList() => _settingsView.GetCurrentSettings().PortList;
 
-    public IPAddress GetFTPIP()
-    {
-        string ip = _settingsView.GetCurrentSettings().FtpIp;
-        return string.IsNullOrEmpty(ip) ? IPAddress.None : IPAddress.Parse(ip);
-    }
-
-    public string GetFTPID() => _settingsView.GetCurrentSettings().FtpId;
-    public string GetFTPPW() => _settingsView.GetCurrentSettings().FtpPassword;
-
-    public int GetFTPPort()
-    {
-        string port = _settingsView.GetCurrentSettings().FtpPort;
-        return string.IsNullOrEmpty(port) ? 0 : int.Parse(port);
-    }
-
-    public bool? GetUseFTP() => _settingsView.GetCurrentSettings().UseFTP;
+    public UploadSettings GetUploadSettings() => _settingsView.GetCurrentSettings().Upload;
     public string GetSystemName() => _settingsView.GetSystemName();
     public bool? GetUsePortChecking() => _settingsView.GetCurrentSettings().UsePortChecking;
     public List<RefPortInfo> GetReservedPortList() => _refPortListView.ReservedPortList;

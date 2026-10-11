@@ -33,7 +33,7 @@ namespace NetworkScanner
             }
             catch (Exception ex)
             {
-                OnError?.Invoke("annotations.ini 로드 실패: " + ex.Message);
+                OnError?.Invoke(string.Format(Localization.T("msg.store.loadfailed"), FileName, ex.Message));
             }
             return map;
         }
@@ -55,7 +55,7 @@ namespace NetworkScanner
             }
             catch (Exception ex)
             {
-                OnError?.Invoke("annotations.ini 저장 실패: " + ex.Message);
+                OnError?.Invoke(string.Format(Localization.T("msg.store.savefailed"), FileName, ex.Message));
             }
         }
 
