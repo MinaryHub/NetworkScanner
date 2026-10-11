@@ -1,11 +1,245 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="NetworkScanner.Avalonia.App"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             Name="Network Scanner"
+             RequestedThemeVariant="Light">
+    <!-- "Harbor Ops" 테마: 네이비 사이드바 + 밝은 회청색 작업면. 색은 상태(정상/주의/위험/없음)와 주 액션(틸)에만 쓴다. -->
+    <Application.Resources>
+        <FontFamily x:Key="UiFont">avares://NetworkScanner.Avalonia/Assets/Fonts#IBM Plex Sans</FontFamily>
+        <FontFamily x:Key="MonoFont">avares://NetworkScanner.Avalonia/Assets/Fonts#IBM Plex Mono</FontFamily>
+
+        <Color x:Key="NavyColor">#FF0F1B2D</Color>
+        <Color x:Key="NavyRaisedColor">#FF16243A</Color>
+        <Color x:Key="MistColor">#FFF4F6F8</Color>
+        <Color x:Key="SurfaceColor">#FFFFFFFF</Color>
+        <Color x:Key="InkColor">#FF14202B</Color>
+        <Color x:Key="SlateColor">#FF4A5B6B</Color>
+        <Color x:Key="MutedColor">#FF8A97A4</Color>
+        <Color x:Key="LineColor">#FFD9E0E7</Color>
+        <Color x:Key="LineSoftColor">#FFE6EBF0</Color>
+        <Color x:Key="TealColor">#FF0F766E</Color>
+        <Color x:Key="TealDarkColor">#FF115E59</Color>
+        <Color x:Key="TealTintColor">#FFE6F4F2</Color>
+        <Color x:Key="TealLightColor">#FF2DD4BF</Color>
+        <Color x:Key="UpColor">#FF15803D</Color>
+        <Color x:Key="WarnColor">#FFB45309</Color>
+        <Color x:Key="WarnTintColor">#FFFEF3C7</Color>
+        <Color x:Key="RiskColor">#FFB91C1C</Color>
+        <Color x:Key="RiskTintColor">#FFFDECEA</Color>
+
+        <SolidColorBrush x:Key="NavyBrush" Color="{StaticResource NavyColor}" />
+        <SolidColorBrush x:Key="NavyRaisedBrush" Color="{StaticResource NavyRaisedColor}" />
+        <SolidColorBrush x:Key="MistBrush" Color="{StaticResource MistColor}" />
+        <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
+        <SolidColorBrush x:Key="InkBrush" Color="{StaticResource InkColor}" />
+        <SolidColorBrush x:Key="SlateBrush" Color="{StaticResource SlateColor}" />
+        <SolidColorBrush x:Key="MutedBrush" Color="{StaticResource MutedColor}" />
+        <SolidColorBrush x:Key="LineBrush" Color="{StaticResource LineColor}" />
+        <SolidColorBrush x:Key="LineSoftBrush" Color="{StaticResource LineSoftColor}" />
+        <SolidColorBrush x:Key="TealBrush" Color="{StaticResource TealColor}" />
+        <SolidColorBrush x:Key="TealDarkBrush" Color="{StaticResource TealDarkColor}" />
+        <SolidColorBrush x:Key="TealTintBrush" Color="{StaticResource TealTintColor}" />
+        <SolidColorBrush x:Key="TealLightBrush" Color="{StaticResource TealLightColor}" />
+        <SolidColorBrush x:Key="UpBrush" Color="{StaticResource UpColor}" />
+        <SolidColorBrush x:Key="WarnBrush" Color="{StaticResource WarnColor}" />
+        <SolidColorBrush x:Key="WarnTintBrush" Color="{StaticResource WarnTintColor}" />
+        <SolidColorBrush x:Key="RiskBrush" Color="{StaticResource RiskColor}" />
+        <SolidColorBrush x:Key="RiskTintBrush" Color="{StaticResource RiskTintColor}" />
+        <SolidColorBrush x:Key="SideTextBrush" Color="#FFC9D3DE" />
+        <SolidColorBrush x:Key="SideMutedBrush" Color="#FF8FA0B2" />
+    </Application.Resources>
 
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+
+        <Style Selector="Window">
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Background" Value="{StaticResource MistBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="TextBlock.h1">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style Selector="TextBlock.section">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource SlateBrush}" />
+            <Setter Property="LetterSpacing" Value="0.8" />
+        </Style>
+        <Style Selector="TextBlock.caption">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{StaticResource SlateBrush}" />
+        </Style>
+        <Style Selector="TextBlock.mono">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        </Style>
+        <Style Selector="TextBlock.stat">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+
+        <!-- 카드/타일: 흰 면 + 1px 선 + 10px 모서리 -->
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+        <Style Selector="Border.tile">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14,10" />
+        </Style>
+        <Style Selector="Border.tile.risk">
+            <Setter Property="Background" Value="{StaticResource RiskTintBrush}" />
+            <Setter Property="BorderBrush" Value="#FFF3B9B3" />
+        </Style>
+        <!-- 상단 액션 바 / 하단 상태줄 -->
+        <Style Selector="Border.bar">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="20,12" />
+        </Style>
+        <Style Selector="Border.statusbar">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="Padding" Value="20,6" />
+        </Style>
+
+        <!-- 버튼: 기본은 흰 면 + 선, primary만 틸 채움 -->
+        <Style Selector="Button">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource MistBrush}" />
+            <Setter Property="BorderBrush" Value="#FFB8C4D0" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource MistBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{StaticResource TealBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource TealBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="18,0" />
+        </Style>
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource TealDarkBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource TealDarkBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.danger">
+            <Setter Property="Foreground" Value="{StaticResource RiskBrush}" />
+        </Style>
+        <Style Selector="Button.accentoutline">
+            <Setter Property="BorderBrush" Value="{StaticResource TealBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TealBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- 사이드바 내비게이션 -->
+        <Style Selector="Button.nav">
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="3,0,0,0" />
+            <Setter Property="Foreground" Value="{StaticResource SideTextBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource NavyRaisedBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <!-- 입력 -->
+        <Style Selector="TextBox">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="TextBox.mono">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        </Style>
+        <Style Selector="ProgressBar">
+            <Setter Property="Foreground" Value="{StaticResource TealBrush}" />
+            <Setter Property="Background" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="MinHeight" Value="6" />
+        </Style>
+
+        <!-- 표: 헤더는 회청색, 가로선만, 데이터 열은 모노스페이스 -->
+        <Style Selector="DataGrid">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+            <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="RowBackground" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="RowHeight" Value="34" />
+        </Style>
+        <Style Selector="DataGridColumnHeader">
+            <Setter Property="Background" Value="{StaticResource MistBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource SlateBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="10,0" />
+        </Style>
+        <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{StaticResource TealTintBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{StaticResource MistBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
     </Application.Styles>
 </Application>

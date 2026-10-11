@@ -3,20 +3,24 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:l="clr-namespace:NetworkScanner.Avalonia.Helpers"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
              x:Class="NetworkScanner.Avalonia.Views.UserGuideView">
-    <Grid Background="#303030" RowDefinitions="60,*">
-        <Grid Grid.Row="0" Margin="16,16,16,0" ColumnDefinitions="Auto,*,Auto">
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-                <Image Source="avares://NetworkScanner.Avalonia/Assets/new-file.png" Width="28" Height="28" />
-                <TextBlock FontSize="22" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" Text="{l:Tr Key=guide.title}" />
-            </StackPanel>
-            <!-- 설명서 언어는 앱 UI 언어(en/ko)와 별개로 즉시 전환된다(영어 기본, 한/일/중 지원). -->
-            <ComboBox Grid.Column="2" Name="CbLanguage" Width="140" VerticalAlignment="Center"
-                      SelectionChanged="CbLanguage_SelectionChanged" />
-        </Grid>
-        <ScrollViewer Grid.Row="1" Margin="16,12,16,16">
-            <StackPanel Name="PnlSections" Spacing="6" MaxWidth="900" HorizontalAlignment="Left" />
+    <Grid RowDefinitions="Auto,*">
+        <Border Grid.Row="0" Classes="bar">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                    <Image Source="avares://NetworkScanner.Avalonia/Assets/info.png" Width="24" Height="24" />
+                    <TextBlock Classes="h1" VerticalAlignment="Center" Text="{l:Tr Key=guide.title}" />
+                </StackPanel>
+                <!-- 설명서 언어는 앱 UI 언어(en/ko)와 별개로 즉시 전환된다(영어 기본, 한/일/중 지원). -->
+                <ComboBox Grid.Column="2" Name="CbLanguage" Width="150" VerticalAlignment="Center"
+                          SelectionChanged="CbLanguage_SelectionChanged" />
+            </Grid>
+        </Border>
+        <ScrollViewer Grid.Row="1" Margin="20,16,20,20">
+            <Border Classes="card" Padding="28,20" MaxWidth="900" HorizontalAlignment="Left">
+                <StackPanel Name="PnlSections" Spacing="6" />
+            </Border>
         </ScrollViewer>
     </Grid>
 </UserControl>

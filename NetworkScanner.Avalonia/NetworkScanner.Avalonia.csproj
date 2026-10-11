@@ -56,5 +56,7 @@
     <AvaloniaResource Include="..\assets\refresh.png" Link="Assets/refresh.png" />
     <AvaloniaResource Include="..\assets\keyring.png" Link="Assets/keyring.png" />
     <AvaloniaResource Include="..\assets\setup.png" Link="Assets/setup.png" />
+    <!-- IBM Plex Sans/Mono (SIL OFL 1.1): UI·데이터 글꼴. App.axaml의 UiFont/MonoFont가 참조한다. -->
+    <AvaloniaResource Include="..\assets\fonts\*.ttf" Link="Assets/Fonts/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

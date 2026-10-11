@@ -3,37 +3,37 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:helpers="clr-namespace:NetworkScanner.Avalonia.Helpers"
-             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+             mc:Ignorable="d" d:DesignWidth="1140" d:DesignHeight="800"
              x:Class="NetworkScanner.Avalonia.Views.IPListView">
 
     <UserControl.Resources>
         <helpers:StatusColorConverter x:Key="StatusColorConverter" />
-        <SolidColorBrush x:Key="StatusGoodBrush" Color="#FF34C777" />
-        <SolidColorBrush x:Key="StatusWarnBrush" Color="#FFF3A53E" />
-        <SolidColorBrush x:Key="StatusBadBrush" Color="#FFEF5875" />
+        <helpers:StatusKeyIsConverter x:Key="StatusKeyIs" />
+        <helpers:StatusRowBackgroundConverter x:Key="StatusRowBackground" />
+        <helpers:StatusForegroundConverter x:Key="StatusForeground" />
     </UserControl.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
-        <Border Grid.Row="0" Background="#FF326678" Padding="12">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+        <!-- 상단 액션 바: 주 버튼은 항상 같은 자리에. 스캔만 틸 채움. -->
+        <Border Grid.Row="0" Classes="bar">
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <TextBlock Grid.Column="0" FontSize="22" FontWeight="Bold" Foreground="White"
-                           VerticalAlignment="Center" Margin="0,0,24,0" Text="{helpers:Tr Key=iplist.title}" />
+                <TextBlock Grid.Column="0" Classes="h1" VerticalAlignment="Center" Margin="0,0,24,0" Text="{helpers:Tr Key=iplist.title}" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Button Name="BtnNewFile" Click="BtnNewFile_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/new-file.png" Width="20" Height="20" />
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/new-file.png" Width="16" Height="16" />
                             <TextBlock VerticalAlignment="Center" Text="{helpers:Tr Key=btn.new}" />
                         </StackPanel>
                     </Button>
                     <Button Name="BtnLoadFile" Click="BtnLoadFile_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/open-file.png" Width="20" Height="20" />
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/open-file.png" Width="16" Height="16" />
                             <TextBlock VerticalAlignment="Center" Text="{helpers:Tr Key=btn.open}" />
                         </StackPanel>
                     </Button>
                     <Button Name="BtnSaveFile" Click="BtnSaveFile_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/save-file.png" Width="20" Height="20" />
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/save-file.png" Width="16" Height="16" />
                             <TextBlock VerticalAlignment="Center" Text="{helpers:Tr Key=btn.save}" />
                         </StackPanel>
                     </Button>
@@ -41,39 +41,87 @@
                         <TextBlock VerticalAlignment="Center" Text="{helpers:Tr Key=btn.report}" />
                     </Button>
                 </StackPanel>
-                <StackPanel Grid.Column="2" HorizontalAlignment="Right" Spacing="4">
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <Button Name="BtnRefresh" Click="BtnRefresh_Click">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Image Source="avares://NetworkScanner.Avalonia/Assets/refresh.png" Width="20" Height="20" />
-                                <TextBlock Name="TbScanLabel" VerticalAlignment="Center" Text="{helpers:Tr Key=btn.scan}" />
-                            </StackPanel>
-                        </Button>
-                        <Button Name="BtnStop" Click="BtnStop_Click" IsEnabled="False" Content="{helpers:Tr Key=btn.cancel}" />
-                    </StackPanel>
-                    <TextBlock Name="TbResult" Foreground="White" HorizontalAlignment="Right" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Name="BtnRefresh" Classes="primary" Click="BtnRefresh_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/refresh.png" Width="16" Height="16" />
+                            <TextBlock Name="TbScanLabel" VerticalAlignment="Center" Foreground="White" Text="{helpers:Tr Key=btn.scan}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Name="BtnStop" Click="BtnStop_Click" IsEnabled="False" Content="{helpers:Tr Key=btn.cancel}" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="12,6">
-            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-                <TextBlock Text="{helpers:Tr Key=label.search}" VerticalAlignment="Center" />
-                <TextBox Name="TbSearch" Width="160" VerticalAlignment="Center"
-                         Watermark="{helpers:Tr Key=search.watermark}" TextChanged="TbSearch_TextChanged" />
-                <CheckBox Name="ChkAliveOnly" Content="{helpers:Tr Key=filter.aliveonly}" VerticalAlignment="Center" IsCheckedChanged="ChkAliveOnly_Changed" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="4">
-                <Ellipse Width="10" Height="10" Fill="{StaticResource StatusGoodBrush}" />
-                <TextBlock Text="{helpers:Tr Key=legend.up}" Margin="0,0,12,0" VerticalAlignment="Center" />
-                <Ellipse Width="10" Height="10" Fill="{StaticResource StatusWarnBrush}" />
-                <TextBlock Text="{helpers:Tr Key=legend.warn}" Margin="0,0,12,0" VerticalAlignment="Center" />
-                <Ellipse Width="10" Height="10" Fill="{StaticResource StatusBadBrush}" />
-                <TextBlock Text="{helpers:Tr Key=legend.down}" VerticalAlignment="Center" />
-            </StackPanel>
+        <!-- 진행률 줄: 스캔 중일 때만 의미가 있다. -->
+        <Border Grid.Row="1" Classes="bar" Padding="20,8">
+            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                <ProgressBar Grid.Column="0" Name="PbProgress" Height="6" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Name="TbProgressPercent" Classes="mono caption" Margin="12,0,0,0" MinWidth="110" TextAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- 요약 타일: 숫자를 먼저, 상세 표는 그 아래. -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*,*" Margin="20,16,20,0" ColumnSpacing="12">
+            <Border Grid.Column="0" Classes="tile">
+                <StackPanel Spacing="2">
+                    <TextBlock Classes="caption" Text="{helpers:Tr Key=tile.total}" />
+                    <TextBlock Name="TbTotal" Classes="stat" Text="0" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Classes="tile">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource UpBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.up}" />
+                    </StackPanel>
+                    <TextBlock Name="TbUp" Classes="stat" Foreground="{StaticResource UpBrush}" Text="0" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Name="TileRisk" Classes="tile">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Path Data="M 6,0 L 12,10 L 0,10 Z" Fill="{StaticResource RiskBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.warn}" />
+                    </StackPanel>
+                    <TextBlock Name="TbRisk" Classes="stat" Foreground="{StaticResource RiskBrush}" Text="0" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="3" Classes="tile">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Width="8" Height="8" Stroke="{StaticResource MutedBrush}" StrokeThickness="2" VerticalAlignment="Center" />
+                        <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.down}" />
+                    </StackPanel>
+                    <TextBlock Name="TbDown" Classes="stat" Foreground="{StaticResource MutedBrush}" Text="0" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="4" Classes="tile">
+                <StackPanel Spacing="2">
+                    <TextBlock Classes="caption" Text="{helpers:Tr Key=tile.shown}" />
+                    <TextBlock Name="TbResult" Classes="stat" Text="0" />
+                </StackPanel>
+            </Border>
         </Grid>
 
-        <DataGrid Grid.Row="2" Name="DgIPList" AutoGenerateColumns="False" CanUserSortColumns="True" CanUserResizeColumns="True" FontFamily="Cascadia Code,Consolas,monospace">
+        <!-- 검색/필터 -->
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*" Margin="20,12,20,10">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                <TextBox Name="TbSearch" Width="300" VerticalAlignment="Center"
+                         Watermark="{helpers:Tr Key=search.watermark}" TextChanged="TbSearch_TextChanged" />
+                <CheckBox Name="ChkAliveOnly" Content="{helpers:Tr Key=filter.aliveonly}" VerticalAlignment="Center" IsCheckedChanged="ChkAliveOnly_Changed" />
+                <CheckBox Name="ChkRiskOnly" Content="{helpers:Tr Key=filter.riskonly}" VerticalAlignment="Center" IsCheckedChanged="ChkAliveOnly_Changed" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Name="TbMsg" Classes="caption" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </Grid>
+
+        <DataGrid Grid.Row="4" Name="DgIPList" Margin="20,0,20,12" AutoGenerateColumns="False" CanUserSortColumns="True" CanUserResizeColumns="True">
+            <DataGrid.Styles>
+                <Style Selector="DataGridRow">
+                    <Setter Property="Background" Value="{Binding StatusKey, Converter={StaticResource StatusRowBackground}}" />
+                    <Setter Property="Foreground" Value="{Binding StatusKey, Converter={StaticResource StatusForeground}}" />
+                </Style>
+            </DataGrid.Styles>
             <DataGrid.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="{helpers:Tr Key=menu.ping}" Click="MenuItemPing_Click" />
@@ -87,35 +135,50 @@
                 </ContextMenu>
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
-                <DataGridTemplateColumn Header="{helpers:Tr Key=col.status}" Width="90" SortMemberPath="StatusText">
+                <DataGridTemplateColumn Header="{helpers:Tr Key=col.status}" Width="96" SortMemberPath="StatusText">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
-                                <Ellipse Width="10" Height="10" Margin="0,0,5,0" VerticalAlignment="Center"
-                                         Fill="{Binding StatusKey, Converter={StaticResource StatusColorConverter}}" />
-                                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" FontFamily="Segoe UI,Inter,sans-serif" FontSize="12" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0" Spacing="6">
+                                <!-- 정상=원, 위험=삼각, 없음=빈 원: 색을 못 봐도 모양으로 구분된다. -->
+                                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{StaticResource UpBrush}"
+                                         IsVisible="{Binding StatusKey, Converter={StaticResource StatusKeyIs}, ConverterParameter=good}" />
+                                <Path Data="M 6,0 L 12,10 L 0,10 Z" VerticalAlignment="Center" Fill="{StaticResource RiskBrush}"
+                                      IsVisible="{Binding StatusKey, Converter={StaticResource StatusKeyIs}, ConverterParameter=warn}" />
+                                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Stroke="{StaticResource MutedBrush}" StrokeThickness="2"
+                                         IsVisible="{Binding StatusKey, Converter={StaticResource StatusKeyIs}, ConverterParameter=bad}" />
+                                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" FontFamily="{StaticResource UiFont}" FontSize="12"
+                                           Foreground="{Binding StatusKey, Converter={StaticResource StatusColorConverter}}" FontWeight="Medium" />
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="{helpers:Tr Key=col.ip}" Binding="{Binding Ip}" IsReadOnly="True" Width="140" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.name}" Binding="{Binding SystemName}" Width="160" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.type}" Binding="{Binding DeviceType}" IsReadOnly="True" Width="120" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.os}" Binding="{Binding OsGuess}" IsReadOnly="True" Width="120" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.ports}" Binding="{Binding Ports}" Width="140" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.service}" Binding="{Binding Service}" IsReadOnly="True" Width="180" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.mac}" Binding="{Binding Macaddr}" Width="160" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.vendor}" Binding="{Binding Vendor}" Width="160" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.rtt}" Binding="{Binding RountTime}" IsReadOnly="True" Width="120" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.note}" Binding="{Binding Description}" Width="240" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.ip}" Binding="{Binding Ip}" IsReadOnly="True" Width="156" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.name}" Binding="{Binding SystemName}" Width="170" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.type}" Binding="{Binding DeviceType}" IsReadOnly="True" Width="120" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.os}" Binding="{Binding OsGuess}" IsReadOnly="True" Width="110" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.ports}" Binding="{Binding Ports}" Width="150" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.service}" Binding="{Binding Service}" IsReadOnly="True" Width="190" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.mac}" Binding="{Binding Macaddr}" Width="180" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.vendor}" Binding="{Binding Vendor}" Width="150" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.rtt}" Binding="{Binding RountTime}" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.note}" Binding="{Binding Description}" Width="240" FontFamily="{StaticResource UiFont}" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.created}" Binding="{Binding CommitDate}" IsReadOnly="True" Width="160" />
             </DataGrid.Columns>
         </DataGrid>
 
-        <Grid Grid.Row="3">
-            <ProgressBar Name="PbProgress" Height="20" Margin="12,2" Foreground="#FF46C2B8" />
-            <TextBlock Name="TbProgressPercent" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" FontWeight="Bold" />
-        </Grid>
-        <TextBlock Grid.Row="4" Name="TbMsg" Margin="4" />
+        <!-- 하단 상태줄: 마지막 메시지 한 줄 + 범례 -->
+        <Border Grid.Row="5" Classes="statusbar">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Name="TbStatusLine" Classes="caption" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Ellipse Width="8" Height="8" Fill="{StaticResource UpBrush}" />
+                    <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.up}" Margin="0,0,10,0" />
+                    <Path Data="M 5,0 L 10,9 L 0,9 Z" Fill="{StaticResource RiskBrush}" VerticalAlignment="Center" />
+                    <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.warn}" Margin="0,0,10,0" />
+                    <Ellipse Width="8" Height="8" Stroke="{StaticResource MutedBrush}" StrokeThickness="2" />
+                    <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.down}" />
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

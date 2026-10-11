@@ -3,26 +3,24 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:l="clr-namespace:NetworkScanner.Avalonia.Helpers"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
              x:Class="NetworkScanner.Avalonia.Views.RefPortListView">
-    <Grid Background="#303030">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="60" />
-            <RowDefinition Height="30" />
-            <RowDefinition />
-            <RowDefinition Height="30" />
-            <RowDefinition />
-        </Grid.RowDefinitions>
-
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16" Spacing="10">
-            <Image Source="avares://NetworkScanner.Avalonia/Assets/keyring.png" Width="28" Height="28" />
-            <TextBlock FontSize="22" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" Text="{l:Tr Key=portinfo.title}" />
-        </StackPanel>
-
-        <TextBlock Grid.Row="1" Margin="16,0" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" Text="{l:Tr Key=portinfo.reserved}" />
-        <ListBox Grid.Row="2" Margin="16,0" Name="LbOpenPortList" />
-
-        <TextBlock Grid.Row="3" Margin="16,0" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" Text="{l:Tr Key=portinfo.backdoor}" />
-        <ListBox Grid.Row="4" Margin="16,0,16,16" Name="LbProhibitPortList" />
+    <Grid RowDefinitions="Auto,*">
+        <Border Grid.Row="0" Classes="bar">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Image Source="avares://NetworkScanner.Avalonia/Assets/keyring.png" Width="24" Height="24" />
+                <TextBlock Classes="h1" VerticalAlignment="Center" Text="{l:Tr Key=portinfo.title}" />
+            </StackPanel>
+        </Border>
+        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="16" Margin="20,16,20,20">
+            <Grid Grid.Column="0" RowDefinitions="Auto,*">
+                <TextBlock Grid.Row="0" Classes="section" Margin="2,0,0,8" Text="{l:Tr Key=portinfo.reserved}" />
+                <ListBox Grid.Row="1" Name="LbOpenPortList" />
+            </Grid>
+            <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                <TextBlock Grid.Row="0" Classes="section" Margin="2,0,0,8" Foreground="{StaticResource RiskBrush}" Text="{l:Tr Key=portinfo.backdoor}" />
+                <ListBox Grid.Row="1" Name="LbProhibitPortList" />
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

@@ -5,11 +5,12 @@
              xmlns:l="clr-namespace:NetworkScanner.Avalonia.Helpers"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              x:Class="NetworkScanner.Avalonia.Views.HistoryView">
-    <Grid RowDefinitions="Auto,Auto,*,Auto,*,Auto" Margin="12">
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,*,Auto">
+        <Border Grid.Row="0" Classes="bar">
+        <Grid ColumnDefinitions="*,Auto">
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-                <Image Source="avares://NetworkScanner.Avalonia/Assets/iplist.png" Width="28" Height="28" />
-                <TextBlock FontSize="22" FontWeight="Bold" VerticalAlignment="Center" Text="{l:Tr Key=history.title}" />
+                <Image Source="avares://NetworkScanner.Avalonia/Assets/open-file.png" Width="24" Height="24" />
+                <TextBlock Classes="h1" VerticalAlignment="Center" Text="{l:Tr Key=history.title}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                 <Button Name="BtnRefresh" Click="BtnRefresh_Click">
@@ -21,10 +22,11 @@
                 <Button Name="BtnPrune" Click="BtnPrune_Click" Content="{l:Tr Key=history.prune}" />
             </StackPanel>
         </Grid>
+        </Border>
 
-        <TextBlock Grid.Row="1" FontWeight="Bold" Margin="0,0,0,4" Text="{l:Tr Key=history.scans}" />
-        <DataGrid Grid.Row="2" Name="DgScans" AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserSortColumns="True" CanUserResizeColumns="True" FontFamily="Cascadia Code,Consolas,monospace">
+        <TextBlock Grid.Row="1" Classes="section" Margin="22,8,0,6" Text="{l:Tr Key=history.scans}" />
+        <DataGrid Grid.Row="2" Name="DgScans" Margin="20,0" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserSortColumns="True" CanUserResizeColumns="True">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="{l:Tr Key=history.col.started}" Binding="{Binding Started}" Width="170" />
                 <DataGridTextColumn Header="{l:Tr Key=history.col.finished}" Binding="{Binding Finished}" Width="170" />
@@ -36,9 +38,9 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock Grid.Row="3" FontWeight="Bold" Margin="0,12,0,4" Text="{l:Tr Key=history.inventory}" />
-        <DataGrid Grid.Row="4" Name="DgInventory" AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserSortColumns="True" CanUserResizeColumns="True" FontFamily="Cascadia Code,Consolas,monospace">
+        <TextBlock Grid.Row="3" Classes="section" Margin="22,16,0,6" Text="{l:Tr Key=history.inventory}" />
+        <DataGrid Grid.Row="4" Name="DgInventory" Margin="20,0" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserSortColumns="True" CanUserResizeColumns="True">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="{l:Tr Key=history.col.ip}" Binding="{Binding Ip}" Width="130" />
                 <DataGridTextColumn Header="{l:Tr Key=history.col.firstseen}" Binding="{Binding FirstSeen}" Width="150" />
@@ -52,6 +54,6 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock Grid.Row="5" Name="TbMsg" Margin="0,8,0,0" />
+        <TextBlock Grid.Row="5" Name="TbMsg" Classes="caption" Margin="20,8,20,12" />
     </Grid>
 </UserControl>

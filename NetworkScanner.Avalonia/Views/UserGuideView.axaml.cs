@@ -7,8 +7,8 @@ namespace NetworkScanner.Avalonia.Views;
 // 여기서는 언어 콤보 선택에 따라 섹션들을 다시 그리기만 한다.
 public partial class UserGuideView : UserControl
 {
-    private static readonly IBrush HeadingBrush = new SolidColorBrush(Color.Parse("#FF46C2B8"));
-    private static readonly IBrush BodyBrush = new SolidColorBrush(Color.Parse("#FFDDDDDD"));
+    private static readonly IBrush HeadingBrush = new SolidColorBrush(Color.Parse("#FF0F766E"));
+    private static readonly IBrush BodyBrush = new SolidColorBrush(Color.Parse("#FF14202B"));
 
     public UserGuideView()
     {

@@ -3,69 +3,71 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:l="clr-namespace:NetworkScanner.Avalonia.Helpers"
-        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="700"
+        mc:Ignorable="d" d:DesignWidth="1360" d:DesignHeight="800"
         x:Class="NetworkScanner.Avalonia.MainWindow"
         Icon="avares://NetworkScanner.Avalonia/Assets/app.ico"
-        Title="Network Scanner" Width="1280" Height="700" Loaded="Window_Loaded">
+        Title="Network Scanner" Width="1360" Height="820" MinWidth="960" MinHeight="600" Loaded="Window_Loaded">
     <Window.Resources>
-        <SolidColorBrush x:Key="SideBackgroundBrush" Color="#FF252469" />
-        <SolidColorBrush x:Key="SideActiveBackgroundBrush" Color="#FF32407A" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#FF46C2B8" />
+        <!-- MainWindow.axaml.cs의 SetActiveNav가 쓰는 키. 값은 App.axaml의 테마 색과 같다. -->
+        <SolidColorBrush x:Key="SideBackgroundBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="SideActiveBackgroundBrush" Color="#FF16243A" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF2DD4BF" />
     </Window.Resources>
-    <Grid ColumnDefinitions="140,*">
-        <Border Grid.Column="0" Background="{StaticResource SideBackgroundBrush}">
-            <Grid RowDefinitions="80,*,Auto">
-                <TextBlock Grid.Row="0" FontSize="16" FontWeight="Bold" Foreground="White"
-                           Margin="12" TextWrapping="Wrap" VerticalAlignment="Center">Network Scanner</TextBlock>
+    <Grid ColumnDefinitions="220,*">
+        <!-- 사이드바: 화면 전환만 담당한다. -->
+        <Border Grid.Column="0" Background="{StaticResource NavyBrush}">
+            <Grid RowDefinitions="Auto,*,Auto" Margin="12,16">
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="10,2,10,18">
+                    <Border Width="28" Height="28" CornerRadius="7" Background="{StaticResource TealBrush}">
+                        <Image Source="avares://NetworkScanner.Avalonia/Assets/app.ico" Width="18" Height="18" />
+                    </Border>
+                    <TextBlock FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center">NetworkScanner</TextBlock>
+                </StackPanel>
+
                 <StackPanel Grid.Row="1" Spacing="4">
-                    <Button Name="BtnIPList" Click="BtnIPList_Click" HorizontalAlignment="Stretch"
-                            Background="{StaticResource SideBackgroundBrush}" BorderBrush="Transparent" BorderThickness="3,0,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/iplist.png" Width="24" Height="24" />
-                            <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=nav.iplist}" />
+                    <Button Name="BtnIPList" Classes="nav" Click="BtnIPList_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/iplist.png" Width="18" Height="18" />
+                            <TextBlock VerticalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}" Text="{l:Tr Key=nav.iplist}" />
                         </StackPanel>
                     </Button>
-                    <Button Name="BtnSetting" Click="BtnSetting_Click" HorizontalAlignment="Stretch"
-                            Background="{StaticResource SideBackgroundBrush}" BorderBrush="Transparent" BorderThickness="3,0,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/settings.png" Width="24" Height="24" />
-                            <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=nav.settings}" />
+                    <Button Name="BtnHistory" Classes="nav" Click="BtnHistory_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/open-file.png" Width="18" Height="18" />
+                            <TextBlock VerticalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}" Text="{l:Tr Key=nav.history}" />
                         </StackPanel>
                     </Button>
-                    <Button Name="BtnPortInfo" Click="BtnPortInfo_Click" HorizontalAlignment="Stretch"
-                            Background="{StaticResource SideBackgroundBrush}" BorderBrush="Transparent" BorderThickness="3,0,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/info.png" Width="24" Height="24" />
-                            <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=nav.portinfo}" />
+                    <Button Name="BtnSetting" Classes="nav" Click="BtnSetting_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/settings.png" Width="18" Height="18" />
+                            <TextBlock VerticalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}" Text="{l:Tr Key=nav.settings}" />
                         </StackPanel>
                     </Button>
-                    <Button Name="BtnHistory" Click="BtnHistory_Click" HorizontalAlignment="Stretch"
-                            Background="{StaticResource SideBackgroundBrush}" BorderBrush="Transparent" BorderThickness="3,0,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/iplist.png" Width="24" Height="24" />
-                            <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=nav.history}" />
+                    <Button Name="BtnPortInfo" Classes="nav" Click="BtnPortInfo_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/keyring.png" Width="18" Height="18" />
+                            <TextBlock VerticalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}" Text="{l:Tr Key=nav.portinfo}" />
                         </StackPanel>
                     </Button>
-                    <Button Name="BtnGuide" Click="BtnGuide_Click" HorizontalAlignment="Stretch"
-                            Background="{StaticResource SideBackgroundBrush}" BorderBrush="Transparent" BorderThickness="3,0,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/new-file.png" Width="24" Height="24" />
-                            <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=nav.guide}" />
+                    <Button Name="BtnGuide" Classes="nav" Click="BtnGuide_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/info.png" Width="18" Height="18" />
+                            <TextBlock VerticalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}" Text="{l:Tr Key=nav.guide}" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
-                <StackPanel Grid.Row="2" Margin="0,0,0,12" Spacing="8">
-                    <!-- 새 버전이 확인되면 표시되는 업데이트 버튼(평소에는 숨김). -->
-                    <Button Name="BtnUpdate" Click="BtnUpdate_Click" IsVisible="False"
-                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                            Margin="8,0" Background="{StaticResource AccentBrush}" Foreground="White">
-                        <TextBlock Name="TbUpdate" TextAlignment="Center" TextWrapping="Wrap"
-                                   Text="{l:Tr Key=update.button}" />
-                    </Button>
+
+                <StackPanel Grid.Row="2" Spacing="10">
                     <!-- 전송에 실패해 outbox에 밀린 업로드 건수(0이면 숨김). -->
-                    <TextBlock Name="TbOutbox" Foreground="#FFF3A53E" TextAlignment="Center" TextWrapping="Wrap"
-                               Margin="8,0" FontSize="11" IsVisible="False" />
-                    <TextBlock Name="TbVersion" Foreground="White" TextAlignment="Center">version</TextBlock>
+                    <Border Background="{StaticResource NavyRaisedBrush}" CornerRadius="8" Padding="12,8" IsVisible="{Binding #TbOutbox.IsVisible}">
+                        <TextBlock Name="TbOutbox" Foreground="#FFF5B23B" FontSize="12" TextWrapping="Wrap" IsVisible="False" />
+                    </Border>
+                    <!-- 새 버전이 확인되면 표시되는 업데이트 버튼(평소에는 숨김). -->
+                    <Button Name="BtnUpdate" Classes="primary" Click="BtnUpdate_Click" IsVisible="False"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                        <TextBlock Name="TbUpdate" TextAlignment="Center" TextWrapping="Wrap" Foreground="White" Text="{l:Tr Key=update.button}" />
+                    </Button>
+                    <TextBlock Name="TbVersion" Foreground="{StaticResource SideMutedBrush}" FontSize="11" Margin="10,0">version</TextBlock>
                 </StackPanel>
             </Grid>
         </Border>

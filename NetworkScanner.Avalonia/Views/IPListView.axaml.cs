@@ -42,7 +42,7 @@ namespace NetworkScanner.Avalonia.Views
         {
             Config = config;
             _engine = new ScanEngine(_items, _oui, Config, services, options);
-            _engine.Message += msg => Dispatcher.UIThread.Post(() => TbMsg.Text = msg);
+            _engine.Message += msg => Dispatcher.UIThread.Post(() => TbStatusLine.Text = msg);
             _engine.ProgressMaxChanged += max => Dispatcher.UIThread.Post(() =>
             {
                 PbProgress.Maximum = max;
@@ -55,7 +55,11 @@ namespace NetworkScanner.Avalonia.Views
                 UpdateProgressPercentText(val, (int)PbProgress.Maximum);
             });
             _engine.ResultsSummaryChanged += (alive, dead, total) => Dispatcher.UIThread.Post(() =>
-                TbResult.Text = $"{Localization.T("status.up")}:{alive} {Localization.T("status.down")}:{dead} / {total}");
+            {
+                TbTotal.Text = total.ToString();
+                TbUp.Text = alive.ToString();
+                TbDown.Text = dead.ToString();
+            });
             _engine.ItemsRefreshNeeded += RequestGridRefresh;
             _engine.ScanStarted += () => Dispatcher.UIThread.Post(() => SetScanningState(true));
             _engine.ScanFinished += () => Dispatcher.UIThread.Post(() =>
@@ -129,8 +133,17 @@ namespace NetworkScanner.Avalonia.Views
 
         private void RefreshGrid()
         {
+            List<IPInfo> shown = FilterItems();
             DgIPList.ItemsSource = null;
-            DgIPList.ItemsSource = FilterItems();
+            DgIPList.ItemsSource = shown;
+            TbResult.Text = shown.Count.ToString();
+
+            // 위험 포트 호스트 수는 요약 이벤트에 없으므로 스냅샷에서 센다. 0이면 타일을 조용한 흰색으로 둔다.
+            int risk;
+            object sync = _engine?.ItemsSyncRoot ?? _items;
+            lock (sync) risk = _items.Count(i => i.HasProhibitedPort);
+            TbRisk.Text = risk.ToString();
+            TileRisk.Classes.Set("risk", risk > 0);
         }
 
         // 병렬 스캔 중 워커 스레드가 _items를 수정할 수 있으므로, 엔진의 쓰기 락을 잡고 스냅샷(복사본)을
@@ -140,10 +153,12 @@ namespace NetworkScanner.Avalonia.Views
             object sync = _engine?.ItemsSyncRoot ?? _items;
             string keyword = TbSearch.Text?.Trim() ?? "";
             bool aliveOnly = ChkAliveOnly.IsChecked == true;
+            bool riskOnly = ChkRiskOnly.IsChecked == true;
             lock (sync)
             {
                 return _items.Where(i =>
                         (!aliveOnly || i.Alive)
+                        && (!riskOnly || i.HasProhibitedPort)
                         && (string.IsNullOrEmpty(keyword) || Matches(i, keyword)))
                     .ToList();
             }

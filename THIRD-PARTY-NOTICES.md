@@ -7,7 +7,8 @@ NetworkScanner bundles or depends on the following third-party components.
 | [.NET 10 runtime](https://github.com/dotnet/runtime) | MIT | Runtime (self-contained builds include it) |
 | [Avalonia UI](https://github.com/AvaloniaUI/Avalonia) 11.3 | MIT | Cross-platform GUI |
 | [Avalonia.Controls.DataGrid](https://github.com/AvaloniaUI/Avalonia) | MIT | Result/settings grids |
-| [Inter font](https://github.com/rsms/inter) (via Avalonia.Fonts.Inter) | SIL OFL 1.1 | UI font |
+| [IBM Plex Sans / Mono](https://github.com/IBM/plex) (`assets/fonts/`) | SIL OFL 1.1 | UI and data fonts |
+| [Inter font](https://github.com/rsms/inter) (via Avalonia.Fonts.Inter) | SIL OFL 1.1 | Fallback font |
 | [Velopack](https://github.com/velopack/velopack) | MIT | Installers and in-app updates |
 | [FluentFTP](https://github.com/robinrodricks/FluentFTP) | MIT | FTP / FTPS upload |
 | [SSH.NET](https://github.com/sshnet/SSH.NET) | MIT | SFTP upload |
