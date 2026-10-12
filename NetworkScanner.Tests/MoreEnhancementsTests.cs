@@ -10,8 +10,8 @@ namespace NetworkScanner.Tests
     public class OsGuesserTests
     {
         [Theory]
-        [InlineData(57, "Linux/Unix/macOS")]
-        [InlineData(64, "Linux/Unix/macOS")]
+        [InlineData(57, "Linux/Unix")]
+        [InlineData(64, "Linux/Unix")]
         [InlineData(117, "Windows")]
         [InlineData(128, "Windows")]
         [InlineData(0, "")]
@@ -68,7 +68,7 @@ namespace NetworkScanner.Tests
             using var doc = System.Text.Json.JsonDocument.Parse(json); // 유효한 JSON인지 파싱으로 확인
             Assert.Contains("10.0.0.1", json);
             Assert.Contains("TestSys", json);
-            Assert.Contains("Linux/Unix/macOS", json); // TTL 64 -> OS 추정이 반영됨
+            Assert.Contains(Localization.T("dev.network"), json); // Cisco 제조사 -> 네트워크 장비로 추정
         }
     }
 

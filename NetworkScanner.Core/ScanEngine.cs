@@ -491,6 +491,52 @@ namespace NetworkScanner
                 }).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }
+
+            // ---- 1단계 보강: 무응답 호스트 재시도(타임아웃 2배) + ARP 캐시 확인 ----
+            // 절전 중인 폰/태블릿, ICMP를 막은 장비는 첫 Ping을 놓치기 쉽다. 재시도 후에도 무응답이면 ARP 캐시에 MAC이 있는지
+            // 본다: ARP에 응답했다는 것은 같은 세그먼트에 켜져 있다는 뜻이므로 살아있는 것으로 본다(응답시간 "ARP").
+            if (!token.IsCancellationRequested)
+            {
+                var aliveSet = new HashSet<string>(aliveIps);
+                List<string> missing = targets.Where(ip => !aliveSet.Contains(ip)).ToList();
+                for (int attempt = 0; attempt < Options.PingRetries && missing.Count > 0 && !token.IsCancellationRequested; attempt++)
+                {
+                    Message?.Invoke($"{Localization.T("scan.phase1.retry")} ({missing.Count})");
+                    var stillMissing = new ConcurrentBag<string>();
+                    int retryTimeout = Options.PingTimeoutMs * 2;
+                    try
+                    {
+                        await Parallel.ForEachAsync(missing, options, async (strIp, ct) =>
+                        {
+                            PingResult? reply = await _services.Pinger.PingAsync(IPAddress.Parse(strIp), retryTimeout, ct).ConfigureAwait(false);
+                            bool alive = reply is { Success: true };
+                            if (!alive) alive = await _services.Ports.IsAliveByTcpAsync(strIp, Options.LivenessProbePorts, retryTimeout, ct).ConfigureAwait(false);
+                            if (alive)
+                            {
+                                aliveIps.Add(strIp);
+                                ApplyPingResult(true, reply is { Success: true } ? reply.Value.RoundtripMs : null, reply is { Success: true } ? reply.Value.Ttl : 0, strIp);
+                            }
+                            else stillMissing.Add(strIp);
+                        }).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { }
+                    missing = stillMissing.ToList();
+                }
+
+                if (Options.ArpLiveness && missing.Count > 0 && !token.IsCancellationRequested)
+                {
+                    int viaArp = 0;
+                    foreach (string ip in missing)
+                    {
+                        string? mac = _services.Arp.Resolve(ip);
+                        if (string.IsNullOrEmpty(mac)) continue;
+                        aliveIps.Add(ip);
+                        ApplyPingResult(true, null, 0, ip, "ARP");
+                        viaArp++;
+                    }
+                    if (viaArp > 0) Message?.Invoke(string.Format(Localization.T("scan.phase1.arp"), viaArp));
+                }
+            }
             RaiseResultsSummary();
 
             // ---- 2단계: 살아있는 호스트 부가 정보 조회 ----
@@ -728,9 +774,9 @@ namespace NetworkScanner
 
         // 1단계 전용: 생존 여부/응답시간/TTL만 반영한다.
         // roundtripMs가 null이면서 alive면 ICMP는 무응답이지만 TCP로 생존이 확인된 경우로, 응답시간을 "TCP"로 표기한다.
-        private void ApplyPingResult(bool alive, long? roundtripMs, int ttl, string targetIp)
+        private void ApplyPingResult(bool alive, long? roundtripMs, int ttl, string targetIp, string noIcmpLabel = "TCP")
         {
-            string roundTime = alive ? (roundtripMs.HasValue ? roundtripMs.Value.ToString(CultureInfo.InvariantCulture) : "TCP") : "Timeout";
+            string roundTime = alive ? (roundtripMs.HasValue ? roundtripMs.Value.ToString(CultureInfo.InvariantCulture) : noIcmpLabel) : "Timeout";
             bool changed = false;
 
             lock (_itemsLock)
@@ -785,10 +831,15 @@ namespace NetworkScanner
             Task<HostIdentity?> identityTask = probe != null && IPAddress.TryParse(targetIp, out IPAddress? addr)
                 ? probe.ProbeAsync(addr, Options.IdentityTimeoutMs, ct)
                 : Task.FromResult<HostIdentity?>(null);
+            Task<int> ttlTask = Options.MeasureTtl && TtlProbe.IsNeeded
+                ? _services.Ttl.MeasureAsync(targetIp, Options.PingTimeoutMs * 2, ct)
+                : Task.FromResult(0);
             List<int> open = usePortChecking
                 ? await _services.Ports.OpenPortsAsync(targetIp, userPorts, Options.PortTimeoutMs, Options.PortParallelism, ct).ConfigureAwait(false)
                 : new List<int>();
             string? hostName = await hostNameTask.ConfigureAwait(false);
+            int measuredTtl = 0;
+            try { measuredTtl = await ttlTask.ConfigureAwait(false); } catch (OperationCanceledException) { throw; } catch { }
             HostIdentity? identity = null;
             try { identity = await identityTask.ConfigureAwait(false); } catch (OperationCanceledException) { throw; } catch { }
 
@@ -821,6 +872,7 @@ namespace NetworkScanner
                 {
                     if (!string.IsNullOrEmpty(mac)) info.Macaddr = mac;
                     if (!string.IsNullOrEmpty(vendor)) info.Vendor = vendor;
+                    if (measuredTtl > 0) info.Ttl = measuredTtl;
                     if (string.IsNullOrEmpty(info.SystemName) && !string.IsNullOrEmpty(chosenName) && chosenName != targetIp)
                         info.SystemName = chosenName;
                     if (identity != null)

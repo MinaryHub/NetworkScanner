@@ -85,7 +85,7 @@ namespace NetworkScanner.Tests
 
             await engine.DoScanAllRange(false, "sys", CancellationToken.None);
 
-            Assert.Equal(20, pinger.Calls);
+            Assert.True(pinger.Calls >= 20); // 재시도 포함
             Assert.Equal(2, engine.Items.Count);
             IPInfo h5 = engine.Items.GetItem("10.9.0.5")!;
             Assert.True(h5.Alive);
@@ -182,7 +182,7 @@ namespace NetworkScanner.Tests
             var pinger = new FakePinger();
             pinger.Alive.Add("10.9.0.5");
             using var history = new ScanHistoryStore(db);
-            var services = new ScanServices { Pinger = pinger, Ports = new FakePorts(), Arp = new FakeArp(), Dns = ScanServices.CreateOffline().Dns, History = history };
+            var services = new ScanServices { Pinger = pinger, Ports = new FakePorts(), Arp = new FakeArp(), Dns = ScanServices.CreateOffline().Dns, History = history, IdentityDisabled = true, Ttl = new NetworkScanner.Network.NullTtlProber() };
 
             var engine = new ScanEngine(new IPInfoList(), new OUIInfo(), Config(ports: false), services);
             await engine.DoScanAllRange(false, "sys", CancellationToken.None);
@@ -200,6 +200,28 @@ namespace NetworkScanner.Tests
             Assert.Contains(reported!, c => c.Type == ScanChangeType.HostOffline && c.Ip == "10.9.0.5");
             Assert.Contains(reported!, c => c.Type == ScanChangeType.NewHost && c.Ip == "10.9.0.8");
             Assert.Equal(2, history.ListScans().Count);
+        }
+
+        [Fact]
+        public async Task Scan_CountsHostsKnownToArpCache_AsAlive_WhenPingAndTcpFail()
+        {
+            // 절전 중인 폰처럼 ICMP/TCP에 답하지 않아도 ARP 캐시에 MAC이 있으면 살아있는 것으로 본다(응답시간 "ARP").
+            var pinger = new FakePinger();
+            pinger.Alive.Add("10.9.0.5");
+            var arp = new FakeArp();
+            arp.Macs["10.9.0.5"] = "AA-AA-AA-AA-AA-01";
+            arp.Macs["10.9.0.12"] = "AA-AA-AA-AA-AA-02";
+            var engine = new ScanEngine(new IPInfoList(), new OUIInfo(), Config(ports: false), ScanServices.CreateOffline(pinger, arp: arp),
+                new ScanOptions { PingRetries = 1, ArpLiveness = true, MeasureTtl = false });
+
+            await engine.DoScanAllRange(false, "sys", CancellationToken.None);
+
+            Assert.Equal(2, engine.Items.Count);
+            IPInfo viaArp = engine.Items.GetItem("10.9.0.12")!;
+            Assert.True(viaArp.Alive);
+            Assert.Equal("ARP", viaArp.RountTime);
+            Assert.Equal("AA-AA-AA-AA-AA-02", viaArp.Macaddr);
+            Assert.True(pinger.Calls >= 20 + 19); // 재시도 1회 포함
         }
 
         [Fact]

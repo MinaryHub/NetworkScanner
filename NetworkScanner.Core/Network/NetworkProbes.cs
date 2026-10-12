@@ -46,7 +46,7 @@ namespace NetworkScanner.Network
                 PingReply reply = await ping.SendPingAsync(ip, TimeSpan.FromMilliseconds(timeoutMs), Buffer,
                     new PingOptions { DontFragment = true }, ct).ConfigureAwait(false);
                 return new PingResult(reply.Status == IPStatus.Success, reply.RoundtripTime,
-                    reply.Options?.Ttl ?? 0, reply.Status.ToString());
+                    OperatingSystem.IsWindows() ? reply.Options?.Ttl ?? 0 : 0, reply.Status.ToString()); // Unix의 Options.Ttl은 송신값이라 버린다
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)

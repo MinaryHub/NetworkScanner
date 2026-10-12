@@ -317,6 +317,10 @@ namespace NetworkScanner
             ["update.uptodate"] = ("You are on the latest version.", "최신 버전입니다."),
             ["update.checking"] = ("Checking for updates...", "업데이트 확인 중..."),
             ["update.notinstalled"] = ("Updates are only available in the installed app.", "설치본에서만 업데이트할 수 있습니다."),
+            ["os.printer"] = ("Printer firmware", "프린터 펌웨어"),
+            ["os.embedded"] = ("Embedded/IoT", "임베디드/IoT"),
+            ["scan.phase1.retry"] = ("[1/2] Retrying unanswered hosts", "[1/2] 무응답 호스트 재시도"),
+            ["scan.phase1.arp"] = ("[1/2] {0} host(s) found via ARP cache", "[1/2] ARP 캐시로 {0}대 추가 발견"),
             ["app.crash"] = ("An unexpected error occurred. Details were written to the log folder:", "예기치 않은 오류가 발생했습니다. 자세한 내용은 로그 폴더에 기록되었습니다:"),
 
             // 참조 포트 정보 화면

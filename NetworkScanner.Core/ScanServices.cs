@@ -18,6 +18,10 @@ namespace NetworkScanner
         public int BannerTimeoutMs { get; set; } = 700;
         public int DnsTimeoutMs { get; set; } = 1500;
         public int IdentityTimeoutMs { get; set; } = 1500;
+        // 1단계 무응답 호스트 재시도 횟수(타임아웃 2배)와 ARP 캐시 기반 생존 판정, Unix TTL 측정(ping 1회).
+        public int PingRetries { get; set; } = 1;
+        public bool ArpLiveness { get; set; } = true;
+        public bool MeasureTtl { get; set; } = true;
         public int TlsTimeoutMs { get; set; } = 3000;
 
         // 대역 전체를 훑는 동시성(호스트 수)과 호스트 한 대 안에서 포트를 동시에 두드리는 수.
@@ -84,6 +88,7 @@ namespace NetworkScanner
         public IPortProber Ports { get; init; } = new TcpPortProber();
         public IArpResolver Arp { get; init; } = ArpResolverFactory.CreateForCurrentOS();
         public IHostNameResolver Dns { get; init; } = new DnsHostNameResolver();
+        public ITtlProber Ttl { get; init; } = new PingUtilityTtlProber();
         // null이면 엔진이 옵션(SNMP/mDNS/NetBIOS 사용 여부, 커뮤니티)에 맞춰 기본 프로브를 만든다. 테스트는 가짜를 끼운다.
         public IIdentityProbe? Identity { get; init; }
         public bool IdentityDisabled { get; init; }
@@ -116,6 +121,7 @@ namespace NetworkScanner
                 Arp = arp ?? new NullArpResolver(),
                 Dns = dns ?? new NoHostNameResolver(),
                 IdentityDisabled = true,
+                Ttl = new NullTtlProber(),
             };
 
         private sealed class NeverPinger : IPinger
