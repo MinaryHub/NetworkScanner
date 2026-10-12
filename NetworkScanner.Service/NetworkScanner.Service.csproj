@@ -27,6 +27,12 @@
     <None Include="..\data\ouiinfo.ini" Link="ouiinfo.ini">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\data\ouiinfo-mam.ini" Link="ouiinfo-mam.ini">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\data\ouiinfo-mas.ini" Link="ouiinfo-mas.ini">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\data\prohibitports.ini" Link="prohibitports.ini">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

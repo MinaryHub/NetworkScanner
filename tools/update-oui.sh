@@ -7,20 +7,19 @@
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-OUT="$ROOT/data/ouiinfo.ini"
-URL="https://standards-oui.ieee.org/oui/oui.txt"
-TMP=$(mktemp)
-trap 'rm -f "$TMP"' EXIT
 
-echo "Downloading $URL ..."
-curl -fsSL --retry 3 "$URL" -o "$TMP"
+# 파일, URL, 최소 항목 수. MA-L(24비트) 외에 MA-M(28비트)·MA-S(36비트) 블록도 받아 작은 제조사까지 찾는다.
+fetch() {
+  OUT="$ROOT/data/$1"; URL="$2"; MIN="$3"
+  TMP=$(mktemp)
+  echo "Downloading $URL ..."
+  if ! curl -fsSL --retry 3 "$URL" -o "$TMP"; then rm -f "$TMP"; echo "download failed: $URL" >&2; return 1; fi
+  COUNT=$(grep -c '(hex)' "$TMP" || true)
+  if [ "$COUNT" -lt "$MIN" ]; then rm -f "$TMP"; echo "Downloaded file looks wrong (only $COUNT entries) - keeping $OUT" >&2; return 1; fi
+  mv "$TMP" "$OUT"; chmod 644 "$OUT"
+  echo "Updated $OUT ($COUNT entries)"
+}
 
-COUNT=$(grep -c '(hex)' "$TMP" || true)
-if [ "$COUNT" -lt 10000 ]; then
-  echo "Downloaded file looks wrong (only $COUNT OUI entries) - keeping the existing $OUT" >&2
-  exit 1
-fi
-
-mv "$TMP" "$OUT"
-trap - EXIT
-echo "Updated $OUT ($COUNT OUI entries)"
+fetch ouiinfo.ini     https://standards-oui.ieee.org/oui/oui.txt     10000
+fetch ouiinfo-mam.ini https://standards-oui.ieee.org/oui28/mam.txt   2000
+fetch ouiinfo-mas.ini https://standards-oui.ieee.org/oui36/oui36.txt 2000

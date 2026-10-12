@@ -321,6 +321,7 @@ namespace NetworkScanner
             ["os.embedded"] = ("Embedded/IoT", "임베디드/IoT"),
             ["scan.phase1.retry"] = ("[1/2] Retrying unanswered hosts", "[1/2] 무응답 호스트 재시도"),
             ["scan.phase1.arp"] = ("[1/2] {0} host(s) found via ARP cache", "[1/2] ARP 캐시로 {0}대 추가 발견"),
+            ["vendor.private"] = ("(private/randomized MAC)", "(랜덤 MAC · 제조사 비공개)"),
             ["app.crash"] = ("An unexpected error occurred. Details were written to the log folder:", "예기치 않은 오류가 발생했습니다. 자세한 내용은 로그 폴더에 기록되었습니다:"),
 
             // 참조 포트 정보 화면
