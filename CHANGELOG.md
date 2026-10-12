@@ -2,6 +2,19 @@
 
 ## Unreleased (2.1.0) — commercial feature set
 
+### Changed (clean-up round)
+- Settings: the "Device identification" and "Deep discovery" groups are one card (Names / Fingerprints / Network rows, one SNMP community); vulnerability assessment sits next to the port settings; the duplicate profile selector, the duplicate History backup button and the fixed 90-day prune are gone (prune uses the retention setting); hours are labelled 00–23; a hint shows when discovery changes need a restart.
+- IP list: search covers model, OS, OS version, type, service and switch port; port checks sit in one "Check ports" submenu; Approve/Unapprove in the context menu; the "Type" column shows the probed category only (the model has its own column); the status legend is gone; column widths are saved by column id, so adding columns no longer scrambles them.
+- Host details show model, MAC, vendor, IPv6, open ports and service, with localized severity/confidence labels. Inventory shows model, OS and note.
+- Per-IP notes typed into the IP list now live in the history database (`hosts.note`) instead of `annotations.ini`, which is imported once.
+- User guide rewritten for the current feature set in English and Korean (Japanese/Chinese dropped).
+- Active ARP sweep now actually runs when enabled; the warning status label and icon follow one rule; profiles no longer leak settings into each other; plaintext banner grabs skip TLS ports.
+- CLI: `-o csv` writes the engine's CSV (loadable by the GUI and collector), `--upload` works without `--scheduled`, `--profile` no longer overrides an explicit `--parallelism`, strict subcommand/argument validation, `assets delete`, settings validation warnings, accurate help; new `NetworkScanner.Cli.Tests`.
+- Service: validated settings, minimum monitor interval, system name resolved once, passive observations pruned, `--run-once` skips the listener; systemd unit allows in-place self-update; Windows install script takes an account and an uninstall script exists.
+- Collector: dashboard download links work with a browser session, retention also removes old upload rows and files, system names with underscores parse correctly, host rows keep OS/model/service/switch port/IPv6/owner, login is rate-limited and tokens are no longer accepted in the URL.
+- CI: release runs tests first and waits for the Docker images; the retired `macos-13` runner was replaced; Docker images get the release version, run as non-root and include `ping`/`curl`; `.dockerignore` added.
+- Removed dead code (PingTester, AnnotationStore, legacy FTP aliases, unused codec builders, unused localization keys).
+
 ### Added
 - **Asset approval baseline**: inventory hosts can be approved (MAC pinned at approval time), given an owner, tags and a note. Optional policy alerts on unapproved live devices (`UnapprovedHost`) and on approved hosts whose MAC changed (`ApprovedMacMismatch`). The first scan can auto-approve everything it finds. GUI inventory actions, `netscan assets …`.
 - **Alert operations**: alerts are deduplicated per event, acknowledged or snoozed, suppressed during maintenance windows (`Mon-Fri 22:00-06:00; Sat,Sun`), re-notified after a configurable interval and auto-resolved when the condition disappears. Alerts view in the GUI, `netscan alerts …`.

@@ -147,7 +147,7 @@ User data lives in a per-user folder that survives updates: `%APPDATA%\NetworkSc
 | `env/` | Saved CSV results and HTML reports |
 | `outbox/` | Uploads waiting to be retried |
 | `logs/` | Daily log files (14 days kept) |
-| `annotations.ini`, `known_hosts` | Per-IP names/notes; pinned SFTP host keys |
+| `known_hosts` | Pinned SFTP host keys. (Per-IP notes typed into the IP list are stored in `history.db`; an old `annotations.ini` is imported once and renamed `*.migrated`.) |
 
 The bundled reference files (`ouiinfo.ini`, `reservedports.ini`, `prohibitports.ini`) are resolved next to the executable.
 

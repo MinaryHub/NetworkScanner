@@ -41,7 +41,7 @@ internal static class TableRenderer
         sb.AppendLine();
         sb.Append($"alive: {aliveCount}   scanned: {total}");
         if (prohibited > 0) sb.Append($"   risky-port hosts: {prohibited}");
-        int highRisk = items.Count(i => i.Alive && i.RiskScore >= 40);
+        int highRisk = items.Count(i => i.Alive && i.RiskScore >= IPInfo.WarnRiskScore);
         if (highRisk > 0) sb.Append($"   high-risk hosts: {highRisk}");
 
         return sb.ToString();
