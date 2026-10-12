@@ -18,10 +18,12 @@ namespace NetworkScanner.Tests
             _dir = Path.Combine(Path.GetTempPath(), "nsc-history-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_dir);
             _dbPath = Path.Combine(_dir, "history.db");
+            UserDataPaths.OverrideRoot = _dir; // 로그(AppLogger) 등이 실제 프로필 폴더를 건드리지 않게
         }
 
         public void Dispose()
         {
+            UserDataPaths.OverrideRoot = null;
             try { Directory.Delete(_dir, recursive: true); } catch { }
         }
 
