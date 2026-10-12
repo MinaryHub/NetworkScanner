@@ -1,13 +1,17 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace NetworkScanner.Collector;
 
-public sealed record ParsedHost(string Ip, bool Alive, string Name, string Mac, string Vendor, string Ports, int RiskScore, bool HasProhibited);
+public sealed record ParsedHost(
+    string Ip, bool Alive, string Name, string Mac, string Vendor, string Ports, int RiskScore, bool HasProhibited,
+    string OsHint = "", string OsVersion = "", string Model = "", string DeviceHint = "", string Service = "",
+    string SwitchPort = "", string Ipv6 = "", bool Approved = false, string Owner = "");
 
 public sealed record ParsedScan(int Total, int Alive, int Risky, int HighRisk, IReadOnlyList<ParsedHost> Hosts);
 
 // ScanEngine.BuildCsv가 만든 CSV를 헤더 이름 기준으로 읽는다(열 순서가 바뀌어도 동작).
-public static class ScanCsvParser
+public static partial class ScanCsvParser
 {
     public const int HighRiskThreshold = 40;
 
@@ -51,17 +55,30 @@ public static class ScanCsvParser
                 Field(row, col, "MacAddress"),
                 Field(row, col, "Vendor"),
                 Field(row, col, "Port"),
-                risk, prohibited));
+                risk, prohibited,
+                OsHint: Field(row, col, "OsHint"),
+                OsVersion: Field(row, col, "OsVersion"),
+                Model: Field(row, col, "Model"),
+                DeviceHint: Field(row, col, "DeviceHint"),
+                Service: Field(row, col, "Service"),
+                SwitchPort: Field(row, col, "SwitchPort"),
+                Ipv6: Field(row, col, "Ipv6"),
+                Approved: ParseBool(Field(row, col, "Approved")),
+                Owner: Field(row, col, "Owner")));
         }
         return new ParsedScan(hosts.Count, alive, risky, high, hosts);
     }
 
-    // 파일 이름의 첫 '_' 앞 부분이 시스템 이름(예: Office-PC_20261011_120000.csv → Office-PC).
+    // 스캐너의 파일 이름 규칙(ScanEngine): <system>_yyyyMMdd_HHmmss[_(SCHEDULING)].csv, <system>_yyyyMMdd_HHmmss_report.html/.pdf.
+    // 수집 서버는 같은 이름이 있으면 -2, -3… 을 덧붙인다. 시스템 이름 자체에 '_'가 있을 수 있으므로 오른쪽부터 떼어 낸다.
+    [GeneratedRegex(@"^(?<name>.+?)_\d{8}_\d{6}(?:_\(SCHEDULING\))?(?:_report)?(?:-\d+)?$", RegexOptions.CultureInvariant)]
+    private static partial Regex FileNamePattern();
+
     public static string SystemNameFromFileName(string fileName)
     {
         string stem = Path.GetFileNameWithoutExtension(fileName);
-        int idx = stem.IndexOf('_');
-        return idx > 0 ? stem.Substring(0, idx) : stem;
+        Match m = FileNamePattern().Match(stem);
+        return m.Success ? m.Groups["name"].Value : stem;
     }
 
     private static string Field(string[] row, Dictionary<string, int> col, string name)

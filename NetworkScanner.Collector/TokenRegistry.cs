@@ -46,6 +46,7 @@ public sealed class TokenRegistry
     }
 
     // Authorization: Bearer → (허용 시) 쿠키 → (허용 시) ?token= 순서로 찾는다. Bearer 헤더가 있으면 그것만 본다.
+    // 수집 서버의 엔드포인트는 모두 allowQuery=false 로 호출한다(URL의 토큰은 로그/히스토리에 남으므로 받지 않는다).
     public Principal? Resolve(HttpRequest request, bool allowCookie, bool allowQuery)
     {
         string? auth = request.Headers.Authorization.FirstOrDefault();

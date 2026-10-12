@@ -1,0 +1,14 @@
+# Docker 빌드 컨텍스트에서 제외: 빌드 산출물, VCS, IDE 파일. 소스 트리만 올라가도록 한다.
+**/bin/
+**/obj/
+**/TestResults/
+**/publish/
+**/release-packages/
+.git/
+.github/
+.claude/
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user

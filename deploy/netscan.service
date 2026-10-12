@@ -2,6 +2,8 @@
 #   sudo cp netscan.service /etc/systemd/system/ && sudo systemctl daemon-reload
 #   sudo systemctl enable --now netscan
 # 설정은 실행 사용자의 ~/.config/NetworkScanner/settings.json (GUI 또는 CLI --use-settings와 동일).
+# %h 는 User= 계정의 홈 디렉터리로 풀리므로 계정 이름을 바꿔도 경로를 고칠 필요가 없다.
+# 홈 디렉터리가 없는 시스템 계정이면 아래 두 줄 대신 StateDirectory 를 쓴다(주석 참고).
 # ICMP 권한: AmbientCapabilities=CAP_NET_RAW 로 setcap 없이 Ping이 가능하다.
 [Unit]
 Description=NetworkScanner scheduled network scanner
@@ -22,7 +24,13 @@ CapabilityBoundingSet=CAP_NET_RAW
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/netscan/.config
+# 쓰기 허용: 사용자 데이터 폴더(settings.json, history.db, env/, outbox/, logs/)와
+# 설치 폴더(자동 업데이트가 바이너리를 제자리에서 교체한다).
+ReadWritePaths=%h/.config/NetworkScanner /opt/netscan
+# 홈 디렉터리가 없는 계정용 대안: /var/lib/netscan 을 만들어 거기에 데이터를 두게 한다.
+#   StateDirectory=netscan
+#   Environment=XDG_CONFIG_HOME=%S/netscan
+#   ReadWritePaths=/opt/netscan
 PrivateTmp=true
 Environment=DOTNET_gcServer=0
 

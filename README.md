@@ -21,7 +21,7 @@ Grab the file for your OS from the **[Releases page](../../releases/latest)**.
 | Windows x64 / arm64 | `NetworkScanner-win-Setup.exe` / `NetworkScanner-win-arm64-Setup.exe` (or the `-Portable.zip`) | `netscan-<ver>-win-x64.zip`, `…-win-arm64.zip` |
 | macOS Apple Silicon / Intel | `NetworkScanner-osx-Setup.pkg` / `NetworkScanner-osx-x64-Setup.pkg` | `netscan-<ver>-osx-arm64.tar.gz`, `…-osx-x64.tar.gz` |
 | Linux x64 / arm64 | `NetworkScanner-linux.AppImage` / `NetworkScanner-linux-arm64.AppImage` | `netscan-<ver>-linux-x64.tar.gz`, `…-linux-arm64.tar.gz` |
-| Docker | — | `ghcr.io/<owner>/netscan:<ver>` |
+| Docker | — | `ghcr.io/<owner>/netscan:<ver>` (CLI), `ghcr.io/<owner>/netscan-collector:<ver>` (collector) |
 
 The `*.nupkg`, `RELEASES*`, `assets.*.json` and `releases.*.json` files are Velopack's auto-update feed; you don't need them.
 
@@ -50,10 +50,13 @@ The `*.nupkg`, `RELEASES*`, `assets.*.json` and `releases.*.json` files are Velo
 | `NetworkScanner.Avalonia/` | GUI |
 | `NetworkScanner.Cli/` | `netscan` command-line front-end |
 | `NetworkScanner.Service/` | `netscan-service` headless scheduler (Microsoft.Extensions.Hosting worker) |
+| `NetworkScanner.Collector/` | `netscan-collector` central report collector (ASP.NET Core minimal API + SQLite index + dashboard) |
 | `NetworkScanner.Tests/` | xUnit tests for Core (run on every OS, no real network needed) |
-| `data/` | Bundled reference data: `ouiinfo.ini` (IEEE OUI registry), `reservedports.ini`, `prohibitports.ini` |
+| `NetworkScanner.Cli.Tests/` | xUnit tests for the CLI option parser and table renderer |
+| `NetworkScanner.Collector.Tests/` | xUnit integration tests for the collector (in-memory test server) |
+| `data/` | Bundled reference data: `ouiinfo.ini` / `ouiinfo-mam.ini` / `ouiinfo-mas.ini` (IEEE MA-L/MA-M/MA-S registries), `reservedports.ini`, `prohibitports.ini`, `vulnrules.json` (offline vulnerability rules) |
 | `assets/` | App icon (`icon/*.svg` masters → `app.ico` / `app.icns` / `app.png` via `tools/build-icons.sh`), bundled fonts and toolbar images |
-| `deploy/` | systemd unit, launchd plist, Windows service installer script, Dockerfile |
+| `deploy/` | systemd unit, launchd plist, Windows service install/uninstall scripts, Dockerfiles for the CLI and the collector |
 | `tools/update-oui.sh` | Refreshes `data/ouiinfo.ini` from IEEE |
 
 Inside Core: `ScanEngine` (scan flow), `ScanServices` (pluggable `IPinger` / `IPortProber` / `IArpResolver` / `IHostNameResolver` / uploader / history), `Platform/` (native ARP readers), `Secrets/` (credential stores), `Upload/` (FTPS/SFTP/HTTPS + outbox), `History/` (SQLite), `Notifications/`, `AppSettingsStore` (`settings.json`), `CsvCodec`, `Localization`.
@@ -77,29 +80,32 @@ dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj
 
 ```
 netscan [options]                                         scan
-netscan history [scans|inventory|host <ip>|prune <days>]  query the local history database
+netscan history [scans|inventory|host <ip>|prune <days>] [--limit N] [-o json]
 
---range <CIDR|start-end|ip>   Range to scan (repeatable). Default: saved settings or the local subnet
+--range <CIDR|start-end|ip>   IPv4 range to scan (repeatable). Default: saved settings or the local subnet
 --ports <list>                Ports to check, e.g. 22,80,443 (omit to skip port scanning)
---use-settings                Use the GUI's settings.json (ranges, ports, limits, language)
---upload / --notify           Upload results / send notifications with the saved settings
---scheduled                   Save CSV + HTML report like a scheduled scan (for cron)
--o table|json|csv|html        Output format; --out <file> writes it to a file
---profile quick|standard|thorough, --allow <risky-port exceptions>
---parallelism <1-512>, --system-name <name>, --lang en|ko, --no-history, -q
+--use-settings                Use the GUI's settings.json (ranges, ports, limits, language); problems are warned
+--upload / --notify           Upload the result CSV / send notifications with the saved settings
+                              (--upload alone saves the CSV to env/ and uploads it; failures go to the outbox)
+--scheduled                   Save CSV + HTML + PDF reports like a scheduled scan (for cron)
+-o table|json|csv|html|pdf    Output format (csv = the GUI's column layout; pdf needs --out); --out <file> writes to a file
+--profile quick|standard|thorough   quick = short timeouts, no banners/identity/vuln/deep discovery; thorough = top ports + everything
+--parallelism <1-512>         Concurrent hosts (overrides the profile), --allow <risky-port exceptions>
+--system-name <name>, --lang en|ko, --no-history, --no-discovery, -q
 
-netscan assets [list|approve <ip…>|unapprove <ip…>|set <ip> --owner X --tags a,b] [--all]
-netscan alerts [list|ack <id>|snooze <id> [hours]|reopen <id>]
+netscan assets [list|approve <ip…>|unapprove <ip…>|set <ip> --owner X --tags a,b --note N|delete <ip…>] [--all] [-y]
+netscan alerts [list|ack <id>|snooze <id> [hours]|reopen <id>] [--note <text>] [--all]
 netscan settings export|import <file>      netscan diag [zip]
 netscan update [check|apply] [--beta] [-y]  # exit 10 = update available (check)
 ```
 
-Progress goes to stderr, results to stdout (safe to pipe). Exit code 3 means the scan succeeded but risky ports were found.
+Progress goes to stderr (suppressed when stderr is not a terminal or with `-q`), results to stdout (safe to pipe). Exit codes: `0` ok, `1` error or declined confirmation, `2` bad arguments, `3` scan succeeded but risky ports were found, `10` `update check` found a newer version.
 
 ```bash
 netscan --range 192.168.1.0/24 --ports 22,80,443 -o json --out scan.json
 netscan --use-settings --scheduled --upload --notify -q      # cron / task-scheduler style run
 netscan history inventory
+netscan assets delete 192.168.1.99 -y
 docker run --rm --net=host --cap-add=NET_RAW ghcr.io/<owner>/netscan --range 10.0.0.0/24
 ```
 
@@ -117,7 +123,7 @@ docker run --rm --net=host --cap-add=NET_RAW ghcr.io/<owner>/netscan --range 10.
 
 ## Central collector (`netscan-collector`)
 
-Several sites can report to one server: the collector (`NetworkScanner.Collector`, Docker image `ghcr.io/<owner>/netscan-collector`) accepts the scanners' HTTPS uploads (one Bearer token per site), stores CSV/HTML/PDF/JSON reports, parses the CSVs into per-scan summaries and host lists, and serves a dashboard (`/`, token login) plus a JSON API (`/api/sites`, `/api/sites/{site}/scans`, `/api/sites/{site}/scans/{id}/hosts`, `/api/uploads/{id}`). See [`deploy/README.md`](deploy/README.md#central-collector-netscan-collector) for configuration; put a TLS-terminating reverse proxy in front of it.
+Several sites can report to one server: the collector (`NetworkScanner.Collector`, Docker image `ghcr.io/<owner>/netscan-collector`) accepts the scanners' HTTPS uploads (one Bearer token per site), stores CSV/HTML/PDF/JSON reports, parses the CSVs into per-scan summaries and host lists, and serves a dashboard (`/`, `/sites/{site}`, `/reports/{id}`; sign in with a token on `/login`, rate-limited) plus a JSON API (`/api/sites`, `/api/sites/{site}/scans`, `/api/sites/{site}/scans/{id}/hosts`, `/api/uploads/{id}`, Bearer token). Each site keeps its newest `ScansPerSite` scans and report files. See [`deploy/README.md`](deploy/README.md#central-collector-netscan-collector) for configuration; put a TLS-terminating reverse proxy in front of it.
 
 ## Headless scheduler (`netscan-service`)
 
@@ -166,7 +172,7 @@ vpk pack --packId NetworkScanner --packVersion 2.0.0 --packDir publish/osx-arm64
 
 ## Releases
 
-Pushing a `v*.*.*` tag runs `.github/workflows/release.yml`, which builds GUI installers for six RIDs, CLI + service archives, a multi-arch Docker image, and attaches everything to a GitHub Release. If these repository secrets exist the binaries are signed (and notarized on macOS): `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`, `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_KEYCHAIN_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. `build-and-test.yml` runs the tests and the full build on Windows, macOS and Linux for every push, plus a vulnerable-package check and a Docker build.
+Pushing a `v*.*.*` tag runs `.github/workflows/release.yml`, which runs the tests, then builds GUI installers for six RIDs, CLI + service archives, two multi-arch Docker images (`netscan` CLI and `netscan-collector`), and attaches everything to a GitHub Release. If these repository secrets exist the binaries are signed (and notarized on macOS): `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`, `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_KEYCHAIN_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. `build-and-test.yml` builds the solution and runs the Core and CLI tests on Windows, macOS and Linux for every push (collector tests and a vulnerable-package check on Linux) and builds both Docker images; the Velopack packaging job runs only on manual dispatch.
 
 ## Known limitations
 

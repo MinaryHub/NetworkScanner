@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 옵션 파서/표 렌더러는 internal이라 테스트 프로젝트에만 연다. -->
+    <InternalsVisibleTo Include="NetworkScanner.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- 참조 데이터 파일은 저장소 루트의 data/ 에 한 벌만 두고, GUI/CLI가 링크로 실행 파일 옆에 복사한다. -->
     <None Include="..\data\ouiinfo.ini" Link="ouiinfo.ini">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

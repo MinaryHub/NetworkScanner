@@ -5,11 +5,14 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  # Velopack 패키징은 시간이 오래 걸리므로 수동 실행에서만 돌린다.
+  workflow_dispatch:
 
 jobs:
-  # Core 테스트는 OS별 분기 코드(ARP/자격 증명/경로)를 각 OS에서 실제로 검증하기 위해 3개 OS에서 모두 돌린다.
+  # 솔루션 전체를 빌드한 뒤 테스트한다. Core 테스트는 OS별 분기 코드(ARP/자격 증명/경로)를 각 OS에서 실제로 검증하기
+  # 위해 3개 OS에서 모두 돌린다(Windows 전용 프로젝트는 더 이상 없으므로 빌드도 여기서 함께 확인한다).
   test:
-    name: Test (${{ matrix.os }})
+    name: Build + test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -20,58 +23,52 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Test
-        run: dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --configuration Release
+      - name: Build solution
+        run: dotnet build NetworkScanner.sln --configuration Release
+      - name: Test Core
+        run: dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --configuration Release --no-build
+      - name: Test CLI
+        run: dotnet test NetworkScanner.Cli.Tests/NetworkScanner.Cli.Tests.csproj --configuration Release --no-build
       - name: Test collector
         if: runner.os == 'Linux'
-        run: dotnet test NetworkScanner.Collector.Tests/NetworkScanner.Collector.Tests.csproj --configuration Release
+        run: dotnet test NetworkScanner.Collector.Tests/NetworkScanner.Collector.Tests.csproj --configuration Release --no-build
       # 알려진 취약점이 있는 패키지를 쓰면 실패시킨다.
       - name: Check vulnerable packages
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          dotnet restore NetworkScanner.sln
           out=$(dotnet list NetworkScanner.sln package --vulnerable --include-transitive 2>&1)
           echo "$out"
           if echo "$out" | grep -qi "has the following vulnerable packages"; then exit 1; fi
 
-  # 솔루션 전체가 어느 OS에서든 빌드되는지 확인한다(Windows 전용 프로젝트는 더 이상 없다).
-  build:
-    name: Build solution (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Build
-        run: dotnet build NetworkScanner.sln --configuration Release
-
   docker:
-    name: Docker image builds (CLI)
+    name: Docker images build (CLI + collector)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - name: Build CLI image
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/Dockerfile
           push: false
           tags: netscan:ci
-      - uses: docker/build-push-action@v6
+          build-args: |
+            VERSION=0.0.${{ github.run_number }}
+      - name: Build collector image
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/Dockerfile.collector
           push: false
           tags: netscan-collector:ci
+          build-args: |
+            VERSION=0.0.${{ github.run_number }}
 
   build-avalonia:
     name: Package (Velopack) Avalonia app
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
