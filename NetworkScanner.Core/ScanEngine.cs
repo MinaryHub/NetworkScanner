@@ -163,7 +163,7 @@ namespace NetworkScanner
             return result;
         }
 
-        internal static string BuildCsv(IEnumerable<IPInfo> items)
+        public static string BuildCsv(IEnumerable<IPInfo> items)
         {
             var sb = new StringBuilder();
             sb.Append(CsvCodec.FormatLine(CsvHeader)).Append("\r\n");

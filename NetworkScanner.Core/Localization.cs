@@ -18,7 +18,6 @@ namespace NetworkScanner
         private static readonly Dictionary<string, (string En, string Ko)> Table = new()
         {
             // 공통/네비게이션
-            ["app.title"] = ("Network Scanner", "Network Scanner"),
             ["nav.iplist"] = ("IP List", "IP 리스트"),
             ["nav.settings"] = ("Settings", "설정"),
             ["nav.portinfo"] = ("Ref. Ports", "참고. 포트정보"),
@@ -30,11 +29,9 @@ namespace NetworkScanner
             ["btn.new"] = ("New", "새로 만들기"),
             ["btn.open"] = ("Open", "파일 열기"),
             ["btn.save"] = ("Save", "파일 저장"),
-            ["btn.report"] = ("Report (HTML/JSON)", "리포트(HTML/JSON)"),
             ["btn.scan"] = ("Scan", "스캔"),
             ["btn.scanning"] = ("Scanning...", "스캔 중..."),
             ["btn.cancel"] = ("Cancel", "취소"),
-            ["label.search"] = ("Search:", "검색:"),
             ["search.watermark"] = ("IP / name / port / MAC / vendor / note", "IP/이름/포트/Mac/Vendor/비고"),
             ["filter.aliveonly"] = ("Alive only", "살아있는 것만"),
             ["legend.up"] = ("Up", "정상"),
@@ -80,11 +77,7 @@ namespace NetworkScanner
             ["settings.ports"] = ("Ports to scan", "검색할 Port"),
             ["settings.useportcheck"] = ("Enable port scan", "Port 검색 사용"),
             ["settings.portno"] = ("Port numbers", "Port 번호"),
-            ["settings.scheduling"] = ("Scheduling", "스케줄링"),
             ["settings.usescheduling"] = ("Enable scheduling", "스케줄링 사용"),
-            ["settings.filelocation"] = ("File save location", "파일저장위치"),
-            ["settings.ftpsave"] = ("FTP upload", "FTP 저장"),
-            ["settings.useftp"] = ("Enable FTP upload", "FTP 저장 사용"),
             ["settings.general"] = ("General", "일반"),
             ["settings.systemname"] = ("System name", "시스템 이름"),
             ["settings.loadlatest"] = ("Load latest file on startup", "시작시 최근 기록 부르기"),
@@ -96,7 +89,6 @@ namespace NetworkScanner
             // 메시지/대화상자
             ["msg.deleteall"] = ("Delete all items?", "리스트를 모두 삭제할까요?"),
             ["msg.delete"] = ("Delete", "삭제"),
-            ["dlg.confirm"] = ("Confirm", "확인"),
             ["msg.noresult.report"] = ("No results to export.", "리포트로 저장할 결과가 없습니다."),
             ["msg.report.saved.html"] = ("HTML report saved.", "HTML 리포트를 저장했습니다."),
             ["msg.report.saved.json"] = ("JSON report saved.", "JSON 리포트를 저장했습니다."),
@@ -194,7 +186,6 @@ namespace NetworkScanner
             ["local.autodetected"] = ("Auto-detected local subnet ({0})", "자동 감지된 로컬 대역 ({0})"),
             ["wol.invalidmac"] = ("Invalid MAC address format: {0}", "MAC 주소 형식이 올바르지 않습니다: {0}"),
             ["wol.sendfailed"] = ("Wake-on-LAN send failed: {0}", "Wake-on-LAN 전송 실패: {0}"),
-            ["secret.unavailable"] = ("No OS credential store is available; secrets are kept in an encrypted file under the user data folder.", "OS 자격 증명 저장소를 사용할 수 없어 비밀번호를 사용자 데이터 폴더의 암호화 파일에 보관합니다."),
 
             // 리포트(HTML)
             ["report.title"] = ("NetworkScanner scan report", "NetworkScanner 스캔 리포트"),
@@ -240,7 +231,6 @@ namespace NetworkScanner
             ["notice.title"] = ("Before you scan", "스캔하기 전에"),
             ["notice.body"] = ("Only scan networks you own or are explicitly authorized to scan. Port scanning other people's systems may be illegal in your jurisdiction. Scan results and uploaded reports may contain sensitive inventory data - protect them accordingly.",
                                "본인이 소유했거나 명시적으로 허가받은 네트워크만 스캔하세요. 타인의 시스템을 포트 스캔하는 것은 법적 문제가 될 수 있습니다. 스캔 결과와 업로드된 리포트에는 민감한 자산 정보가 포함될 수 있으니 적절히 보호하세요."),
-            ["notice.accept"] = ("I understand", "확인했습니다"),
             ["tile.total"] = ("Addresses", "전체 주소"),
             ["tile.shown"] = ("Shown", "표시 중"),
             ["filter.riskonly"] = ("Risky only", "위험만"),
@@ -275,7 +265,6 @@ namespace NetworkScanner
             ["assets.approved"] = ("Approved", "승인"),
             ["assets.approvedmac"] = ("Approved MAC", "승인 MAC"),
             ["assets.risk"] = ("Risk", "위험도"),
-            ["alerts.title"] = ("Alerts", "알림"),
             ["alerts.open"] = ("Open alerts", "열린 알림"),
             ["alerts.ack"] = ("Acknowledge", "확인"),
             ["alerts.snooze"] = ("Snooze 24h", "24시간 스누즈"),
