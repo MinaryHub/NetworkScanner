@@ -211,6 +211,30 @@
                 </WrapPanel>
             </Border>
 
+            <!-- 심층 발견: 멀티캐스트 브라우징, 핑거프린트 프로브, 라우터/OS 테이블, 패시브 캡처. -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <WrapPanel>
+                        <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.discovery}" />
+                        <CheckBox Name="ChkDiscSsdp" Content="{l:Tr Key=settings.discovery.ssdp}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscMdns" Content="{l:Tr Key=settings.discovery.mdns}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscSmb" Content="{l:Tr Key=settings.discovery.smb}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscSsh" Content="{l:Tr Key=settings.discovery.ssh}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscHttp" Content="{l:Tr Key=settings.discovery.http}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscUdp" Content="{l:Tr Key=settings.discovery.udp}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscNeighbor" Content="{l:Tr Key=settings.discovery.neighbor}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscMergeHistory" Content="{l:Tr Key=settings.discovery.mergehistory}" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <CheckBox Name="ChkDiscGatewaySnmp" Content="{l:Tr Key=settings.discovery.gatewaysnmp}" Margin="0,0,12,0" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Text="{l:Tr Key=settings.discovery.snmpagents}" />
+                        <TextBox Name="TbDiscSnmpAgents" Width="320" Classes="mono" Watermark="10.0.0.1; 10.0.0.2:community" Margin="0,0,16,0" />
+                        <CheckBox Name="ChkDiscActiveArp" Content="{l:Tr Key=settings.discovery.activearp}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscPassive" Content="{l:Tr Key=settings.discovery.passive}" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
             <!-- 이력 보존/백업과 수동 백업·복원. 복원은 다음 시작 시 적용된다(엔진이 DB를 열기 전). -->
             <Border Classes="card">
                 <WrapPanel>

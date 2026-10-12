@@ -20,6 +20,7 @@ internal sealed class CliOptions
     public string? Profile { get; private set; }
     public bool PdfNeedsFile { get; set; }
     public bool Yes { get; private set; }
+    public bool NoDiscovery { get; private set; }
     public bool Beta { get; private set; }
     public int HistoryLimit { get; private set; } = 50;
 
@@ -209,6 +210,10 @@ internal sealed class CliOptions
                     o.NoHistory = true;
                     break;
 
+                case "--no-discovery":
+                    o.NoDiscovery = true;
+                    break;
+
                 default:
                     return o.Fail($"unknown option: {a}");
             }
@@ -287,6 +292,7 @@ SCAN OPTIONS:
   --system-name <name>          System name recorded with results (default: saved or hostname)
   --lang <en|ko>                Language for messages/labels (default: en)
   --no-history                  Do not record this scan in the local history database
+  --no-discovery                Skip deep discovery (SSDP/mDNS/SMB/SSH/HTTP/UDP/SNMP tables)
   -q, --quiet                   Suppress progress messages on stderr
   -h, --help                    Show this help
 

@@ -16,6 +16,7 @@ NetworkScanner bundles or depends on the following third-party components.
 | [SSH.NET](https://github.com/sshnet/SSH.NET) | MIT | SFTP upload |
 | [Microsoft.Data.Sqlite](https://github.com/dotnet/efcore) + [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) | MIT / Apache-2.0 | Scan history database |
 | [Microsoft.Extensions.Hosting](https://github.com/dotnet/runtime) (+ WindowsServices, Systemd) | MIT | Headless scheduler service |
+| [SharpPcap](https://github.com/dotnet-pcap/sharppcap) 6.3 + [PacketDotNet](https://github.com/dotnet-pcap/packetnet) | MIT | Optional passive packet listener (requires libpcap or [Npcap](https://npcap.com/) installed by the user — Npcap has its own licence, it is not redistributed) |
 | [System.Security.Cryptography.ProtectedData](https://github.com/dotnet/runtime) | MIT | Windows DPAPI secret store |
 | [IEEE OUI registry](https://standards-oui.ieee.org/) (`data/ouiinfo.ini`) | IEEE public data | MAC vendor lookup |
 | Toolbar icons in `assets/` | See original authors (Kyo-Tux "Delikate" icon set and others) | Toolbar images (the app icon itself is original, `assets/icon/`) |

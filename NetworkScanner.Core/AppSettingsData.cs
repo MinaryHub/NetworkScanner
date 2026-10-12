@@ -64,6 +64,9 @@ namespace NetworkScanner
         public AlertSettings Alerts { get; set; } = new AlertSettings();
         public AssetPolicySettings AssetPolicy { get; set; } = new AssetPolicySettings();
 
+        // 심층 발견/핑거프린트(SSDP·mDNS 브라우징, SMB/SSH/HTTP/UDP 프로브, 라우터 SNMP 테이블, 패시브 캡처).
+        public DiscoverySettings Discovery { get; set; } = new DiscoverySettings();
+
         // 식별 프로브(SNMP/mDNS/NetBIOS)와 취약점 평가.
         public IdentitySettings Identity { get; set; } = new IdentitySettings();
         public bool AssessVulnerabilities { get; set; } = true;
@@ -158,6 +161,24 @@ namespace NetworkScanner
         public bool AutoApproveFirstScan { get; set; } = true;
         // 이 점수 이상이면 HighRisk 알림(0 = 끔).
         public int HighRiskThreshold { get; set; } = 40;
+    }
+
+    public sealed class DiscoverySettings
+    {
+        public bool Ssdp { get; set; } = true;              // UPnP M-SEARCH 멀티캐스트
+        public bool MdnsBrowse { get; set; } = true;        // Bonjour 서비스 브라우징
+        public bool Smb { get; set; } = true;               // SMB2/NTLM 협상(OS 버전·호스트명)
+        public bool Ssh { get; set; } = true;               // SSH 배너 → 배포판
+        public bool Http { get; set; } = true;              // 웹 페이지/인증서 핑거프린트
+        public bool UdpProbes { get; set; } = true;         // DNS/NTP/SSDP/TFTP/SIP
+        public bool NeighborTables { get; set; } = true;    // OS ARP/NDP 테이블(IPv6 포함)
+        public bool GatewaySnmp { get; set; } = true;       // 기본 게이트웨이의 ARP/FDB/LLDP 테이블(SNMP)
+        public string SnmpAgents { get; set; } = "";        // 추가 SNMP 장비 "ip[:community]; ip2"
+        public bool ActiveArp { get; set; } = true;         // 능동 ARP(지원 OS·권한일 때만)
+        public bool PassiveListener { get; set; }           // 패시브 캡처(libpcap/npcap + 권한 필요)
+        public bool MergeHistory { get; set; } = true;      // 이전 스캔의 사실을 낮은 신뢰도로 합침
+        public int DiscoveryTimeoutMs { get; set; } = 3000;
+        public int ProbeTimeoutMs { get; set; } = 2500;
     }
 
     public sealed class IdentitySettings

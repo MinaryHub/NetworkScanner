@@ -25,6 +25,15 @@ namespace NetworkScanner.Avalonia.Views
             TbSource.Text = string.IsNullOrEmpty(info.IdentitySource) ? "-" : info.IdentitySource;
             TbOs.Text = string.IsNullOrEmpty(info.OsHint) ? info.OsGuess : info.OsHint;
             TbDevice.Text = string.IsNullOrEmpty(info.DeviceHint) ? info.DeviceType : info.DeviceHint;
+            TbOsVersion.Text = string.IsNullOrEmpty(info.OsVersion) ? "-" : info.OsVersion;
+            TbSwitchPort.Text = string.IsNullOrEmpty(info.SwitchPort) ? "-" : info.SwitchPort;
+            var facts = NetworkScanner.Discovery.HostFacts.FromJson(info.Ip, info.FactsJson);
+            var factRows = facts.All
+                .OrderBy(f => f.Field).ThenByDescending(f => (int)f.Confidence)
+                .Select(f => new FactRow(f.Field, f.Value, f.Source, f.Confidence.ToString()))
+                .ToList();
+            TbFactsHeader.Text = $"{Localization.T("details.facts")} ({factRows.Count})";
+            LstFacts.ItemsSource = factRows;
             TbRisk.Text = info.RiskScore.ToString();
             TbRisk.Foreground = info.RiskScore >= 40 ? Risk : Ink;
             TbApproved.Text = info.Approved
@@ -37,6 +46,8 @@ namespace NetworkScanner.Avalonia.Views
                 ? rows
                 : new List<FindingRow> { new(Localization.T("details.nofindings"), "", "", "", "", Ink) };
         }
+
+        private sealed record FactRow(string Field, string Value, string Source, string Confidence);
 
         // 심각도 높은 것부터. 잘못된 JSON은 빈 목록으로 취급한다(상세 창이 열리지 않는 것보다 낫다).
         private static List<FindingRow> ParseFindings(string json)

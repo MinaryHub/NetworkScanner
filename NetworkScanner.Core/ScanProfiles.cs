@@ -41,6 +41,7 @@ namespace NetworkScanner
                     options.IdentityProbes = false;
                     options.BannerGrab = false;
                     options.AssessVulnerabilities = false;
+                    options.DeepDiscovery = false;
                     break;
                 case ScanProfileKind.Thorough:
                     options.Parallelism = Math.Min(options.Parallelism, 32);

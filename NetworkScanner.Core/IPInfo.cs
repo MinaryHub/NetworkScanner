@@ -46,7 +46,8 @@ namespace NetworkScanner
         public string StatusText => !Alive ? Localization.T("status.down") : (HasProhibitedPort ? Localization.T("status.warn") : Localization.T("status.up"));
 
         // 제조사·열린 포트로 추정한 장비 종류(참고용). UI의 "종류" 컬럼에 표시된다.
-        public string DeviceType => string.IsNullOrEmpty(DeviceHint) ? DeviceClassifier.Classify(Vendor, Ports) : DeviceHint;
+        // 종류: 프로브가 확인한 범주 → 모델명 → 제조사/포트 분류 순.
+        public string DeviceType => !string.IsNullOrEmpty(DeviceHint) ? DeviceHint : !string.IsNullOrEmpty(Model) ? Model : DeviceClassifier.Classify(Vendor, Ports);
         public string DeviceHint { get; set; } = "";
 
         // Ping 응답의 TTL(0이면 미측정). OsGuess는 TTL로 추정한 OS 계열(참고용).
@@ -64,6 +65,14 @@ namespace NetworkScanner
         // 취약점/약한 설정 평가 결과(0~100)와 발견 항목 JSON. 평가를 끄면 0/"".
         public int RiskScore { get; set; }
         public string FindingsJson { get; set; } = "";
+
+        // 핑거프린트/발견 프로브가 모은 사실(출처·신뢰도 포함) JSON. 상세 화면과 "값의 근거" 표시에 쓴다.
+        public string FactsJson { get; set; } = "";
+        // OS 상세 버전(Windows 10.0.19045, Ubuntu 24.04 …), 모델명, 스위치 포트, IPv6 주소(발견된 경우).
+        public string OsVersion { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string SwitchPort { get; set; } = "";
+        public string Ipv6 { get; set; } = "";
 
         // 자산 승인 여부(인벤토리 기준). 미승인 상태로 살아있으면 UI가 별도 표시한다.
         public bool Approved { get; set; }

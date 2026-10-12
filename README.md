@@ -29,7 +29,8 @@ The `*.nupkg`, `RELEASES*`, `assets.*.json` and `releases.*.json` files are Velo
 
 ## Features
 
-- Two-phase range scan: parallel ping sweep with TCP fallback for hosts that block ICMP, then per-host enrichment (MAC/vendor, reverse DNS, open ports, service banner, OS guess from TTL, device-type guess)
+- Two-phase range scan: parallel ping sweep (adaptive retry) with TCP, ARP-cache and multicast/neighbour-table fallbacks for hosts that block ICMP, then per-host enrichment (MAC/vendor, reverse DNS, open ports, service banner, OS guess from TTL, device-type guess)
+- Deep discovery: SMB/SSH/HTTP fingerprints (exact Windows build, Linux distribution, web UI model), SSDP/mDNS browsing (friendly name, model, Apple/Chromecast/printer details), UDP service probes, router SNMP ARP/FDB/LLDP tables (switch port per host), IPv6 neighbours, optional passive capture (DHCP/ARP/TCP fingerprints); every value carries its source and confidence
 - Native ARP table lookup on every OS (no `arp` command required)
 - Reserved-port and risky (backdoor/trojan) port matching
 - Change detection between scans with security alerts; the previous scan is remembered across restarts
@@ -107,6 +108,7 @@ docker run --rm --net=host --cap-add=NET_RAW ghcr.io/<owner>/netscan --range 10.
 - **Asset approval**: every host ever seen is in the inventory (History screen / `netscan assets list`). Approve the ones you know (`netscan assets approve 10.0.0.5` or `--all` for everything currently alive); the MAC seen at approval time is pinned. With *Alert on unapproved devices* enabled, any live host outside the approved list raises `UnapprovedHost`, and an approved IP answering with a different MAC raises `ApprovedMacMismatch`. The first scan can auto-approve everything it finds to form the baseline. Owner, tags and notes are kept per host.
 - **Alert operations**: the same event is one alert no matter how many scans repeat it; acknowledge or snooze it (`netscan alerts ack <id>` / `snooze <id> [hours]`), define maintenance windows (`Mon-Fri 22:00-06:00; Sat,Sun`) during which nothing is sent, choose how often an open alert is re-sent, and alerts resolve themselves when the condition disappears.
 - **Identification**: besides reverse DNS, live hosts are asked over SNMP v2c (sysDescr/sysName/sysObjectID, community configurable), mDNS and NetBIOS; the best name wins and OS/device hints replace the TTL guess.
+- **Deep discovery** (Settings → Discovery, on by default; `--no-discovery` on the CLI): each live host is fingerprinted over SMB2 (NTLM: computer/domain name, exact Windows version/build), SSH (software + distribution, e.g. *Ubuntu 25.10*) and HTTP/HTTPS (server header, title, vendor web UIs, TLS certificate names); the whole network is browsed once per scan over SSDP and mDNS (friendly names, model numbers, Apple model identifiers, Chromecast/printer/TV details); UDP probes (DNS, NTP, SIP, TFTP, SSDP unicast) catch devices with no TCP service; the OS neighbour tables (ARP/NDP) and, when a community is configured, the gateway's/switches' SNMP tables (ARP, bridge FDB, LLDP) contribute hosts that never answer pings, their IPv6 addresses and the **switch port** they hang off. On Linux an active ARP sweep runs too, and an optional **passive listener** (libpcap/Npcap, needs capture privileges) keeps collecting DHCP host names, vendor classes and TCP/IP stack fingerprints between scans. Every value is stored as a *fact* with its source and confidence (visible in the host details window and in the JSON report); facts from earlier scans fill gaps with lowered confidence, and timeouts adapt to the measured round-trip times.
 - **Assessment**: open ports and banners are matched against the offline rule set `data/vulnrules.json` (vulnerable versions such as old OpenSSH/nginx/Apache, exposed databases/remote-admin ports, SSH-1, plain Telnet/FTP) and TLS endpoints are inspected (expired/expiring/self-signed certificates, TLS 1.0/1.1, weak RSA keys). Each host gets a 0–100 risk score; `HighRisk` alerts fire above the configured threshold. Update the rule file with your own entries — the embedded copy is used when the file is missing.
 - **Scan profiles**: *quick* (ping sweep only, 128 parallel), *standard* (your settings), *thorough* (top ~80 service ports added, identification + assessment on, slower timeouts). `--profile` on the CLI.
 - **Reports**: HTML, JSON and **PDF** (Korean-capable) from the GUI, `-o pdf --out file.pdf` on the CLI; scheduled scans save CSV + HTML + PDF.
@@ -134,7 +136,7 @@ User data lives in a per-user folder that survives updates: `%APPDATA%\NetworkSc
 |---|---|
 | `settings.json` | All settings and scan ranges (schema v2). Old `setting.ini` / `iprange.ini` are migrated once and renamed `*.migrated`. |
 | `secrets/` | Encrypted-file secret store (used when no OS credential store is available). Passwords/tokens are never written to `settings.json`. |
-| `history.db` | SQLite scan history, inventory (approvals/owners/tags) and alerts |
+| `history.db` | SQLite scan history (schema v3, with per-host facts/OS version/model/switch port), inventory (approvals/owners/tags) and alerts |
 | `backups/` | Daily `history-*.db` backups (rotated) |
 | `env/` | Saved CSV results and HTML reports |
 | `outbox/` | Uploads waiting to be retried |
@@ -171,7 +173,8 @@ Pushing a `v*.*.*` tag runs `.github/workflows/release.yml`, which builds GUI in
 - **MAC addresses** are only resolvable inside the scanner's own subnet (ARP). Hosts behind a router show no MAC.
 - **ICMP permission**: on Linux/macOS a normal user may be unable to send raw ICMP. The scan then relies on the TCP liveness fallback and logs a one-time hint. Fix: `sudo setcap cap_net_raw+ep <executable>` (the systemd unit already grants it) or run as root.
 - **Unsigned installer warnings** when no signing secrets are configured: macOS → right-click → Open (or `xattr -d com.apple.quarantine <file>`); Windows SmartScreen → *More info → Run anyway*. Some antivirus products quarantine unsigned Velopack installers; use the Portable zip or whitelist it.
-- IPv4 only.
+- Scanning is IPv4 only; IPv6 addresses are only recorded when mDNS or the neighbour tables reveal them.
+- The passive listener needs libpcap (Linux/macOS) or Npcap (Windows) and capture privileges; without them it reports itself unavailable and the scan continues without it. Active ARP sweeps are Linux-only.
 
 ## License
 

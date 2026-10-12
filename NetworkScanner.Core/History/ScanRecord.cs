@@ -7,7 +7,8 @@ namespace NetworkScanner.History
     public sealed record ScanHostRecord(
         string Ip, bool Alive, string Mac, string Vendor, string Name,
         string Ports, string Service, string Rtt, int Ttl, bool HasProhibited,
-        string SysDescr = "", int RiskScore = 0, string FindingsJson = "");
+        string SysDescr = "", int RiskScore = 0, string FindingsJson = "",
+        string FactsJson = "", string OsVersion = "", string Model = "", string SwitchPort = "");
 
     // 한 번의 스캔 전체(시작/종료 시각, 시스템 이름, 예약 스캔 여부, 호스트 목록).
     public sealed record ScanRecord(
@@ -35,7 +36,11 @@ namespace NetworkScanner.History
                     item.HasProhibitedPort,
                     item.SysDescr ?? "",
                     item.RiskScore,
-                    item.FindingsJson ?? ""));
+                    item.FindingsJson ?? "",
+                    item.FactsJson ?? "",
+                    item.OsVersion ?? "",
+                    item.Model ?? "",
+                    item.SwitchPort ?? ""));
             }
             return new ScanRecord(started, finished, systemName ?? "", scheduled, hosts);
         }
@@ -52,7 +57,7 @@ namespace NetworkScanner.History
         string Ip, DateTimeOffset FirstSeen, DateTimeOffset LastSeen, DateTimeOffset? LastAliveAt,
         string LastMac, string LastVendor, string LastName, string LastPorts, bool LastAlive, int SeenCount,
         bool Approved = false, string ApprovedMac = "", string Owner = "", string Tags = "", string Note = "",
-        int RiskScore = 0);
+        int RiskScore = 0, string LastModel = "", string LastOs = "", string LastSwitchPort = "");
 
     // 특정 IP가 스캔마다 어떤 상태였는지(시간순 이력).
     public sealed record HostHistoryEntry(

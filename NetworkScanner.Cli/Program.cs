@@ -90,11 +90,14 @@ var config = new CliConfig
 };
 
 var items = new IPInfoList();
-var services = ScanServices.CreateDefault(withHistory: !options.NoHistory);
+var services = options.NoDiscovery
+    ? ScanServices.CreateDefault(withHistory: !options.NoHistory)
+    : ScanServices.CreateDefault(saved ?? new AppSettingsData(), withHistory: !options.NoHistory);
 var engineOptions = saved != null ? ScanOptions.FromSettings(saved) : new ScanOptions();
 if (options.Parallelism > 0) engineOptions.Parallelism = options.Parallelism;
 engineOptions.RiskAllowList.AddRange(options.Allow);
 if (options.Profile != null) ScanProfiles.Apply(engineOptions, ScanProfiles.Parse(options.Profile));
+if (options.NoDiscovery) engineOptions.DeepDiscovery = false;
 var engine = new ScanEngine(items, oui, config, services, engineOptions);
 
 bool quiet = options.Quiet || Console.IsErrorRedirected;

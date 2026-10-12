@@ -12,10 +12,11 @@ internal static class TableRenderer
                          .OrderBy(i => SortKey(i.Ip))
                          .ToList();
 
-        var headers = new[] { "IP", "STATUS", "NAME", "TYPE", "OS", "PORTS", "SERVICE", "MAC", "VENDOR", "RISK", "RTT" };
+        var headers = new[] { "IP", "STATUS", "NAME", "TYPE", "MODEL", "OS", "PORTS", "SERVICE", "MAC", "VENDOR", "RISK", "RTT" };
+        // OS 열은 상세 버전(SMB/SSH 등으로 확인된 경우)을 우선 보여준다.
         var rows = alive.Select(i => new[]
         {
-            i.Ip ?? "", i.StatusText ?? "", i.SystemName ?? "", i.DeviceType ?? "", i.OsGuess ?? "",
+            i.Ip ?? "", i.StatusText ?? "", i.SystemName ?? "", Truncate(i.DeviceType, 22), Truncate(i.Model, 22), Truncate(string.IsNullOrEmpty(i.OsVersion) ? i.OsGuess : i.OsVersion, 26),
             i.Ports ?? "", Truncate(i.Service, 28), i.Macaddr ?? "", Truncate(i.Vendor, 22),
             i.RiskScore > 0 ? i.RiskScore.ToString() : "", i.RountTime ?? ""
         }).ToList();

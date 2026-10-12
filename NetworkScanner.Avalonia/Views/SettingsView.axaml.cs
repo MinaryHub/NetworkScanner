@@ -143,6 +143,18 @@ namespace NetworkScanner.Avalonia.Views
             ChkMdns.IsChecked = data.Identity.Mdns;
             ChkNetBios.IsChecked = data.Identity.NetBios;
             ChkVuln.IsChecked = data.AssessVulnerabilities;
+            ChkDiscSsdp.IsChecked = data.Discovery.Ssdp;
+            ChkDiscMdns.IsChecked = data.Discovery.MdnsBrowse;
+            ChkDiscSmb.IsChecked = data.Discovery.Smb;
+            ChkDiscSsh.IsChecked = data.Discovery.Ssh;
+            ChkDiscHttp.IsChecked = data.Discovery.Http;
+            ChkDiscUdp.IsChecked = data.Discovery.UdpProbes;
+            ChkDiscNeighbor.IsChecked = data.Discovery.NeighborTables;
+            ChkDiscMergeHistory.IsChecked = data.Discovery.MergeHistory;
+            ChkDiscGatewaySnmp.IsChecked = data.Discovery.GatewaySnmp;
+            TbDiscSnmpAgents.Text = data.Discovery.SnmpAgents;
+            ChkDiscActiveArp.IsChecked = data.Discovery.ActiveArp;
+            ChkDiscPassive.IsChecked = data.Discovery.PassiveListener;
 
             TbRetention.Text = data.HistoryRetentionDays.ToString();
             TbBackups.Text = data.HistoryBackupsToKeep.ToString();
@@ -221,6 +233,23 @@ namespace NetworkScanner.Avalonia.Views
                     NetBios = ChkNetBios.IsChecked == true,
                 },
                 AssessVulnerabilities = ChkVuln.IsChecked == true,
+                Discovery = new DiscoverySettings
+                {
+                    Ssdp = ChkDiscSsdp.IsChecked == true,
+                    MdnsBrowse = ChkDiscMdns.IsChecked == true,
+                    Smb = ChkDiscSmb.IsChecked == true,
+                    Ssh = ChkDiscSsh.IsChecked == true,
+                    Http = ChkDiscHttp.IsChecked == true,
+                    UdpProbes = ChkDiscUdp.IsChecked == true,
+                    NeighborTables = ChkDiscNeighbor.IsChecked == true,
+                    MergeHistory = ChkDiscMergeHistory.IsChecked == true,
+                    GatewaySnmp = ChkDiscGatewaySnmp.IsChecked == true,
+                    SnmpAgents = TbDiscSnmpAgents.Text ?? "",
+                    ActiveArp = ChkDiscActiveArp.IsChecked == true,
+                    PassiveListener = ChkDiscPassive.IsChecked == true,
+                    DiscoveryTimeoutMs = _loaded.Discovery.DiscoveryTimeoutMs,
+                    ProbeTimeoutMs = _loaded.Discovery.ProbeTimeoutMs,
+                },
                 ScanProfile = SelectedTag(CmbProfile) ?? "standard",
                 HistoryRetentionDays = ParseInt(TbRetention.Text, -1),
                 Update = new UpdateSettings

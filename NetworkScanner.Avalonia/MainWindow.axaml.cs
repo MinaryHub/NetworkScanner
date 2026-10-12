@@ -47,7 +47,8 @@ public partial class MainWindow : Window, IScanConfigProvider
         ApplyPendingHistoryRestore();
 
         // 엔진에는 실제 업로드 outbox + SQLite 이력을 연결하고, 동시성/상한은 설정값으로 시작한다.
-        _services = ScanServices.CreateDefault();
+        StartPassiveIfEnabled(startup);
+        _services = ScanServices.CreateDefault(startup, passiveSnapshot: _passive == null ? null : () => _passive.SnapshotByIp());
         _ipListView.Initialize(this, _services, ScanOptions.FromSettings(startup));
         _ipListView.AlertsProcessed += OnAlertsProcessed;
         _ipListView.ScanFinished += OnScanFinished;
@@ -209,6 +210,26 @@ public partial class MainWindow : Window, IScanConfigProvider
     // 설정(Update.*)에 따라 시작 시·주기적으로 확인하고, 백그라운드로 내려받고, 종료 시 자동 설치한다.
     // 설치본이 아닌 개발 실행(dotnet run)에서는 조용히 아무것도 하지 않는다.
     private DateTime _lastUpdateCheck = DateTime.MinValue;
+
+    // 패시브 캡처(설정에서 켠 경우, libpcap/npcap + 권한 필요). 실패해도 앱은 그대로 동작한다.
+    private NetworkScanner.Capture.PassiveListener? _listener;
+    private NetworkScanner.Capture.ObservationAggregator? _passive;
+
+    private void StartPassiveIfEnabled(AppSettingsData settings)
+    {
+        if (!settings.Discovery.PassiveListener) return;
+        try
+        {
+            var (ok, reason) = NetworkScanner.Capture.PassiveListener.Probe();
+            if (!ok) { AppLogger.LogWarn("NetworkScanner", "passive capture unavailable: " + reason); return; }
+            _passive = new NetworkScanner.Capture.ObservationAggregator();
+            _listener = new NetworkScanner.Capture.PassiveListener();
+            _listener.Observed += obs => _passive.Add(obs);
+            _listener.Start();
+            Closing += (_, _) => { try { _listener.Dispose(); } catch { } };
+        }
+        catch (Exception ex) { AppLogger.LogWarn("NetworkScanner", "passive capture failed: " + ex.Message); }
+    }
 
     private void InitUpdates(AppSettingsData settings)
     {

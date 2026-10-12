@@ -18,6 +18,9 @@ public sealed class ScanSchedulerWorker : BackgroundService
     private readonly ILogger<ScanSchedulerWorker> _log;
     private readonly SchedulerOptions _opts;
     private readonly IHostApplicationLifetime _lifetime;
+    // 패시브 캡처(설정에서 켠 경우): 스캔 사이에도 ARP/DHCP/mDNS/SSDP 브로드캐스트를 들어 관측을 모은다.
+    private NetworkScanner.Capture.PassiveListener? _listener;
+    private NetworkScanner.Capture.ObservationAggregator? _passive;
 
     public ScanSchedulerWorker(ILogger<ScanSchedulerWorker> log, SchedulerOptions opts, IHostApplicationLifetime lifetime)
     {
@@ -39,6 +42,7 @@ public sealed class ScanSchedulerWorker : BackgroundService
         PingTester.OnError = m => _log.LogWarning("{Message}", m);
 
         _log.LogInformation("NetworkScanner service started. Settings: {Path}", AppSettingsStore.SettingsPath);
+        StartPassiveIfEnabled(AppSettingsStore.LoadSettings());
 
         if (_opts.RunOnce)
         {
@@ -126,6 +130,27 @@ public sealed class ScanSchedulerWorker : BackgroundService
         }
     }
 
+    private void StartPassiveIfEnabled(AppSettingsData settings)
+    {
+        if (!settings.Discovery.PassiveListener) return;
+        try
+        {
+            var (ok, reason) = NetworkScanner.Capture.PassiveListener.Probe();
+            if (!ok) { _log.LogWarning("passive capture unavailable: {Reason}", reason); return; }
+            _passive = new NetworkScanner.Capture.ObservationAggregator();
+            _listener = new NetworkScanner.Capture.PassiveListener();
+            _listener.Observed += obs => _passive.Add(obs);
+            if (_listener.Start()) _log.LogInformation("passive capture started on {Interface}", _listener.InterfaceName);
+        }
+        catch (Exception ex) { _log.LogWarning("passive capture failed to start: {Message}", ex.Message); }
+    }
+
+    public override void Dispose()
+    {
+        try { _listener?.Dispose(); } catch { }
+        base.Dispose();
+    }
+
     private async Task RunScanAsync(CancellationToken ct, bool scheduled, AppSettingsData? settings = null)
     {
         settings ??= AppSettingsStore.LoadSettings();
@@ -135,7 +160,7 @@ public sealed class ScanSchedulerWorker : BackgroundService
         oui.LoadInfo();
         var (reserved, prohibited) = PortReferenceLoader.Load();
         var config = new ServiceConfig(settings, AppSettingsStore.LoadScanRanges(), reserved, prohibited);
-        var services = ScanServices.CreateDefault();
+        var services = ScanServices.CreateDefault(settings, passiveSnapshot: _passive == null ? null : () => _passive.SnapshotByIp());
         var engine = new ScanEngine(new IPInfoList(), oui, config, services, ScanOptions.FromSettings(settings));
         engine.Message += m => _log.LogInformation("{Message}", m);
 

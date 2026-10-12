@@ -14,7 +14,7 @@ namespace NetworkScanner.History
     {
         public static string DefaultPath => UserDataPaths.Resolve("history.db");
 
-        private const int CurrentSchemaVersion = 2;
+        private const int CurrentSchemaVersion = 3;
 
         private readonly object _gate = new();
         private readonly SqliteConnection _conn;
@@ -65,6 +65,7 @@ namespace NetworkScanner.History
                 {
                     case 1: MigrateV1(tx); break;
                     case 2: MigrateV2(tx); break;
+                    case 3: MigrateV3(tx); break;
                 }
                 using (var cmd = _conn.CreateCommand())
                 {
@@ -153,6 +154,20 @@ CREATE INDEX IF NOT EXISTS ix_alerts_state ON alerts(state);
 ", tx);
         }
 
+        // v3: 사실(출처·신뢰도) JSON과 OS 버전/모델/스위치 포트.
+        private void MigrateV3(SqliteTransaction tx)
+        {
+            Exec(@"
+ALTER TABLE scan_hosts ADD COLUMN facts       TEXT NOT NULL DEFAULT '';
+ALTER TABLE scan_hosts ADD COLUMN os_version  TEXT NOT NULL DEFAULT '';
+ALTER TABLE scan_hosts ADD COLUMN model       TEXT NOT NULL DEFAULT '';
+ALTER TABLE scan_hosts ADD COLUMN switch_port TEXT NOT NULL DEFAULT '';
+ALTER TABLE hosts ADD COLUMN last_model       TEXT NOT NULL DEFAULT '';
+ALTER TABLE hosts ADD COLUMN last_os          TEXT NOT NULL DEFAULT '';
+ALTER TABLE hosts ADD COLUMN last_switch_port TEXT NOT NULL DEFAULT '';
+", tx);
+        }
+
         // ---- 쓰기 ----
 
         // 스캔 1건과 호스트 결과를 저장하고 hosts 인벤토리를 갱신한다. 반환값은 scans.id.
@@ -199,8 +214,8 @@ SELECT last_insert_rowid();";
                     hostCmd.Transaction = tx;
                     // 같은 IP가 두 번 들어와도(중복 범위 등) 마지막 값으로 덮어쓴다.
                     hostCmd.CommandText = @"
-INSERT OR REPLACE INTO scan_hosts(scan_id, ip, alive, mac, vendor, name, ports, service, rtt, ttl, has_prohibited, sys_descr, risk_score, findings)
-VALUES(@scan, @ip, @alive, @mac, @vendor, @name, @ports, @service, @rtt, @ttl, @prohibited, @sysdescr, @risk, @findings);";
+INSERT OR REPLACE INTO scan_hosts(scan_id, ip, alive, mac, vendor, name, ports, service, rtt, ttl, has_prohibited, sys_descr, risk_score, findings, facts, os_version, model, switch_port)
+VALUES(@scan, @ip, @alive, @mac, @vendor, @name, @ports, @service, @rtt, @ttl, @prohibited, @sysdescr, @risk, @findings, @facts, @osver, @model, @swport);";
                     var pIp = hostCmd.Parameters.Add("@ip", SqliteType.Text);
                     var pAlive = hostCmd.Parameters.Add("@alive", SqliteType.Integer);
                     var pMac = hostCmd.Parameters.Add("@mac", SqliteType.Text);
@@ -214,6 +229,10 @@ VALUES(@scan, @ip, @alive, @mac, @vendor, @name, @ports, @service, @rtt, @ttl, @
                     var pSysDescr = hostCmd.Parameters.Add("@sysdescr", SqliteType.Text);
                     var pRisk = hostCmd.Parameters.Add("@risk", SqliteType.Integer);
                     var pFindings = hostCmd.Parameters.Add("@findings", SqliteType.Text);
+                    var pFacts = hostCmd.Parameters.Add("@facts", SqliteType.Text);
+                    var pOsVer = hostCmd.Parameters.Add("@osver", SqliteType.Text);
+                    var pModel = hostCmd.Parameters.Add("@model", SqliteType.Text);
+                    var pSwPort = hostCmd.Parameters.Add("@swport", SqliteType.Text);
                     hostCmd.Parameters.AddWithValue("@scan", scanId);
 
                     invCmd.Transaction = tx;
@@ -221,10 +240,13 @@ VALUES(@scan, @ip, @alive, @mac, @vendor, @name, @ports, @service, @rtt, @ttl, @
                     // MAC/제조사/이름은 이번 스캔에서 비어 있으면(응답 없음 등) 마지막으로 알던 값을 유지하고,
                     // 포트는 살아있을 때의 값만 반영한다.
                     invCmd.CommandText = @"
-INSERT INTO hosts(ip, first_seen, last_seen, last_alive_at, last_mac, last_vendor, last_name, last_ports, last_alive, seen_count, last_risk)
-VALUES(@ip, @now, @now, CASE WHEN @alive = 1 THEN @now ELSE '' END, @mac, @vendor, @name, @ports, @alive, 1, @risk)
+INSERT INTO hosts(ip, first_seen, last_seen, last_alive_at, last_mac, last_vendor, last_name, last_ports, last_alive, seen_count, last_risk, last_model, last_os, last_switch_port)
+VALUES(@ip, @now, @now, CASE WHEN @alive = 1 THEN @now ELSE '' END, @mac, @vendor, @name, @ports, @alive, 1, @risk, @model, @osver, @swport)
 ON CONFLICT(ip) DO UPDATE SET
     last_risk     = CASE WHEN excluded.last_alive = 1 THEN excluded.last_risk ELSE hosts.last_risk END,
+    last_model    = CASE WHEN excluded.last_model <> '' THEN excluded.last_model ELSE hosts.last_model END,
+    last_os       = CASE WHEN excluded.last_os <> '' THEN excluded.last_os ELSE hosts.last_os END,
+    last_switch_port = CASE WHEN excluded.last_switch_port <> '' THEN excluded.last_switch_port ELSE hosts.last_switch_port END,
     last_seen     = excluded.last_seen,
     last_alive_at = CASE WHEN excluded.last_alive = 1 THEN excluded.last_seen ELSE hosts.last_alive_at END,
     last_mac      = CASE WHEN excluded.last_mac    <> '' THEN excluded.last_mac    ELSE hosts.last_mac    END,
@@ -240,6 +262,9 @@ ON CONFLICT(ip) DO UPDATE SET
                     var iName = invCmd.Parameters.Add("@name", SqliteType.Text);
                     var iPorts = invCmd.Parameters.Add("@ports", SqliteType.Text);
                     var iRisk = invCmd.Parameters.Add("@risk", SqliteType.Integer);
+                    var iModel = invCmd.Parameters.Add("@model", SqliteType.Text);
+                    var iOsVer = invCmd.Parameters.Add("@osver", SqliteType.Text);
+                    var iSwPort = invCmd.Parameters.Add("@swport", SqliteType.Text);
                     invCmd.Parameters.AddWithValue("@now", startedAt);
 
                     foreach (var h in record.Hosts)
@@ -259,6 +284,10 @@ ON CONFLICT(ip) DO UPDATE SET
                         pSysDescr.Value = h.SysDescr ?? "";
                         pRisk.Value = h.RiskScore;
                         pFindings.Value = h.FindingsJson ?? "";
+                        pFacts.Value = h.FactsJson ?? "";
+                        pOsVer.Value = h.OsVersion ?? "";
+                        pModel.Value = h.Model ?? "";
+                        pSwPort.Value = h.SwitchPort ?? "";
                         hostCmd.ExecuteNonQuery();
 
                         iIp.Value = h.Ip;
@@ -268,6 +297,9 @@ ON CONFLICT(ip) DO UPDATE SET
                         iName.Value = h.Name ?? "";
                         iPorts.Value = h.Ports ?? "";
                         iRisk.Value = h.RiskScore;
+                        iModel.Value = h.Model ?? "";
+                        iOsVer.Value = h.OsVersion ?? "";
+                        iSwPort.Value = h.SwitchPort ?? "";
                         invCmd.ExecuteNonQuery();
                     }
                 }
@@ -364,7 +396,7 @@ ORDER BY s.started_at DESC, s.id DESC LIMIT @limit;";
                 {
                     cmd.CommandText = @"
 SELECT ip, first_seen, last_seen, last_alive_at, last_mac, last_vendor, last_name, last_ports, last_alive, seen_count,
-       approved, approved_mac, owner, tags, note, last_risk
+       approved, approved_mac, owner, tags, note, last_risk, last_model, last_os, last_switch_port
 FROM hosts;";
                     using var r = cmd.ExecuteReader();
                     while (r.Read())
@@ -375,7 +407,8 @@ FROM hosts;";
                             lastAliveAt.Length == 0 ? null : Parse(lastAliveAt),
                             r.GetString(4), r.GetString(5), r.GetString(6), r.GetString(7),
                             r.GetInt64(8) != 0, r.GetInt32(9),
-                            r.GetInt64(10) != 0, r.GetString(11), r.GetString(12), r.GetString(13), r.GetString(14), r.GetInt32(15)));
+                            r.GetInt64(10) != 0, r.GetString(11), r.GetString(12), r.GetString(13), r.GetString(14), r.GetInt32(15),
+                            r.GetString(16), r.GetString(17), r.GetString(18)));
                     }
                 }
 
@@ -414,6 +447,20 @@ FROM hosts;";
                         states[r.GetString(0)] = new HostState(r.GetInt64(1) != 0, r.GetString(2), r.GetString(3), r.GetInt64(4) != 0);
                 }
                 return states;
+            }
+        }
+
+        // 가장 최근 스캔에서 이 IP에 대해 기록된 사실 JSON(없으면 ""). 여러 시점 관측을 합칠 때 쓴다.
+        public string GetLastFactsJson(string ip)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = "SELECT facts FROM scan_hosts WHERE ip = @ip AND facts <> '' ORDER BY scan_id DESC LIMIT 1;";
+                cmd.Parameters.AddWithValue("@ip", ip);
+                object? v = cmd.ExecuteScalar();
+                return v is string s ? s : "";
             }
         }
 

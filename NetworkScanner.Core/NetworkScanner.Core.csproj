@@ -16,6 +16,9 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <!-- Reports/PdfReport의 PDF 리포트 생성(MIT). 시스템 폰트에 의존하지 않도록 아래 나눔고딕을 임베드해 사용한다. -->
     <PackageReference Include="PDFsharp" Version="6.2.4" />
+    <!-- Capture/PassiveListener의 수동 패킷 수집(ARP/DHCP/mDNS/SSDP/NetBIOS/TCP SYN-ACK). PacketDotNet을 함께 끌어온다.
+         런타임에 libpcap(macOS 기본 포함, Linux는 libpcap, Windows는 Npcap)과 캡처 권한이 없으면 IsAvailable=false로 조용히 비활성화된다. -->
+    <PackageReference Include="SharpPcap" Version="6.3.1" />
   </ItemGroup>
 
   <ItemGroup>

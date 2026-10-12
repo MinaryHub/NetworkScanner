@@ -8,6 +8,13 @@ namespace NetworkScanner
     // 스캔 결과를 사람이 읽기 좋은 HTML 리포트, 또는 다른 도구와 연동하기 좋은 JSON으로 만든다.
     public static class ReportGenerator
     {
+        // facts 열은 이미 JSON 배열 문자열이므로 중첩 문자열이 아닌 배열로 내보낸다.
+        private static JsonElement? ParseFacts(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try { return JsonSerializer.Deserialize<JsonElement>(json); } catch (JsonException) { return null; }
+        }
+
         // 다른 시스템 연동/후처리를 위한 JSON 리포트.
         public static string BuildJson(IEnumerable<IPInfo> items, string systemName, string timestamp)
         {
@@ -23,6 +30,11 @@ namespace NetworkScanner
                     name = i.SystemName,
                     deviceType = i.DeviceType,
                     osGuess = i.OsGuess,
+                    osVersion = i.OsVersion,
+                    model = i.Model,
+                    switchPort = i.SwitchPort,
+                    ipv6 = i.Ipv6,
+                    facts = ParseFacts(i.FactsJson),
                     ports = i.Ports,
                     service = i.Service,
                     mac = i.Macaddr,

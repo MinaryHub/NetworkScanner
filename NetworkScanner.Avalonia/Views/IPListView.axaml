@@ -165,11 +165,14 @@
                 <DataGridTextColumn Header="{helpers:Tr Key=col.name}" Binding="{Binding SystemName}" Width="170" FontFamily="{StaticResource UiFont}" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.type}" Binding="{Binding DeviceType}" IsReadOnly="True" Width="120" FontFamily="{StaticResource UiFont}" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.os}" Binding="{Binding OsGuess}" IsReadOnly="True" Width="110" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.model}" Binding="{Binding Model}" IsReadOnly="True" Width="150" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.osversion}" Binding="{Binding OsVersion}" IsReadOnly="True" Width="170" FontFamily="{StaticResource UiFont}" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.ports}" Binding="{Binding Ports}" Width="150" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.service}" Binding="{Binding Service}" IsReadOnly="True" Width="190" FontFamily="{StaticResource UiFont}" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.mac}" Binding="{Binding Macaddr}" Width="180" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.vendor}" Binding="{Binding Vendor}" Width="150" FontFamily="{StaticResource UiFont}" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.rtt}" Binding="{Binding RountTime}" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Header="{helpers:Tr Key=col.switchport}" Binding="{Binding SwitchPort}" IsReadOnly="True" Width="150" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.note}" Binding="{Binding Description}" Width="240" FontFamily="{StaticResource UiFont}" />
                 <DataGridTextColumn Header="{helpers:Tr Key=col.created}" Binding="{Binding CommitDate}" IsReadOnly="True" Width="160" />
                 <!-- 위험 점수(0은 빈칸)와 자산 승인 표시. 저장된 컬럼 너비(인덱스 기준)와 호환되도록 맨 뒤에 둔다. -->

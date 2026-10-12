@@ -18,6 +18,13 @@ namespace NetworkScanner
         public int BannerTimeoutMs { get; set; } = 700;
         public int DnsTimeoutMs { get; set; } = 1500;
         public int IdentityTimeoutMs { get; set; } = 1500;
+        // 심층 발견: 네트워크 전체 발견(SSDP/mDNS/테이블) 시간과 호스트별 핑거프린트 프로브 시간, 이전 스캔 사실 병합.
+        public bool DeepDiscovery { get; set; } = true;
+        public int DiscoveryTimeoutMs { get; set; } = 3000;
+        public int FactProbeTimeoutMs { get; set; } = 2500;
+        public bool MergeHistoryFacts { get; set; } = true;
+        // 1단계 응답시간을 보고 타임아웃을 늘리는 적응형 조정(느린 Wi-Fi 세그먼트 누락 감소).
+        public bool AdaptiveTimeouts { get; set; } = true;
         // 1단계 무응답 호스트 재시도 횟수(타임아웃 2배)와 ARP 캐시 기반 생존 판정, Unix TTL 측정(ping 1회).
         public int PingRetries { get; set; } = 1;
         public bool ArpLiveness { get; set; } = true;
@@ -77,6 +84,9 @@ namespace NetworkScanner
             NetBiosEnabled = s.Identity.NetBios,
             Profile = ScanProfiles.Parse(s.ScanProfile),
             HistoryRetentionDays = Math.Max(0, s.HistoryRetentionDays),
+            DiscoveryTimeoutMs = Math.Clamp(s.Discovery.DiscoveryTimeoutMs, 500, 20000),
+            FactProbeTimeoutMs = Math.Clamp(s.Discovery.ProbeTimeoutMs, 300, 20000),
+            MergeHistoryFacts = s.Discovery.MergeHistory,
             HistoryBackupsToKeep = Math.Max(0, s.HistoryBackupsToKeep),
         }, ScanProfiles.Parse(s.ScanProfile));
     }
@@ -89,6 +99,12 @@ namespace NetworkScanner
         public IArpResolver Arp { get; init; } = ArpResolverFactory.CreateForCurrentOS();
         public IHostNameResolver Dns { get; init; } = new DnsHostNameResolver();
         public ITtlProber Ttl { get; init; } = new PingUtilityTtlProber();
+        // 호스트별 핑거프린트 프로브(SMB/SSH/HTTP/UDP)와 네트워크 전체 발견(SSDP/mDNS/라우터 테이블/이웃 테이블).
+        // 비어 있으면 엔진은 그 단계를 건너뛴다. 기본 구성은 DiscoveryDefaults가 설정값으로 만든다.
+        public IReadOnlyList<IFactProbe> FactProbes { get; init; } = Array.Empty<IFactProbe>();
+        public IReadOnlyList<INetworkDiscovery> NetworkDiscoveries { get; init; } = Array.Empty<INetworkDiscovery>();
+        // 패시브 캡처가 모아 둔 관측(IP → 사실). 서비스/GUI가 리스너를 소유하고 스냅샷 함수를 넘긴다.
+        public Func<IReadOnlyDictionary<string, HostFacts>>? PassiveSnapshot { get; init; }
         // null이면 엔진이 옵션(SNMP/mDNS/NetBIOS 사용 여부, 커뮤니티)에 맞춰 기본 프로브를 만든다. 테스트는 가짜를 끼운다.
         public IIdentityProbe? Identity { get; init; }
         public bool IdentityDisabled { get; init; }
@@ -96,7 +112,23 @@ namespace NetworkScanner
         public ScanHistoryStore? History { get; init; }
         public Func<DateTime> Clock { get; init; } = () => DateTime.Now;
 
-        // 실제 앱용: 업로드 outbox와 SQLite 이력까지 연결한다.
+        // 실제 앱용: 업로드 outbox, SQLite 이력, 설정에 따른 심층 발견(프로브/네트워크 발견)까지 연결한다.
+        public static ScanServices CreateDefault(AppSettingsData settings, bool withHistory = true, Func<IReadOnlyDictionary<string, HostFacts>>? passiveSnapshot = null)
+        {
+            ScanServices basic = CreateDefault(withHistory);
+            DiscoverySettings d = settings.Discovery;
+            string community = string.IsNullOrWhiteSpace(settings.Identity.SnmpCommunity) ? "public" : settings.Identity.SnmpCommunity;
+            return new ScanServices
+            {
+                Uploader = basic.Uploader,
+                History = basic.History,
+                FactProbes = DiscoveryDefaults.BuildFactProbes(d),
+                NetworkDiscoveries = DiscoveryDefaults.BuildNetworkDiscoveries(d, community),
+                PassiveSnapshot = passiveSnapshot,
+            };
+        }
+
+        // 실제 앱용(발견 없이): 업로드 outbox와 SQLite 이력까지 연결한다.
         public static ScanServices CreateDefault(bool withHistory = true)
         {
             ScanHistoryStore? history = null;

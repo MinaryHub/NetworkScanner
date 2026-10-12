@@ -33,6 +33,11 @@ namespace NetworkScanner
         private List<int> _userPorts = new();
         private IIdentityProbe? _identity;
         private bool _identityBuilt;
+        // 네트워크 전체 발견(SSDP/mDNS/테이블/패시브)이 모은 IP별 사실. 2단계에서 호스트별 사실과 합친다.
+        private readonly ConcurrentDictionary<string, HostFacts> _discoveredFacts = new();
+        // MAC으로만 알려진 사실(스위치 포트, DHCP 관측 등). 2단계에서 MAC을 알게 되면 그 호스트에 붙인다.
+        private readonly ConcurrentDictionary<string, List<Fact>> _discoveredByMac = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentBag<long> _phase1Rtts = new();
 
         public IScanConfigProvider Config { get; set; }
         private ScanOptions _options = new();
@@ -76,6 +81,7 @@ namespace NetworkScanner
         {
             "IPAddress", "Port", "SystemName", "Description", "Commitdate", "Alive", "MacAddress", "Vendor", "RoundTime",
             "Service", "Ttl", "HasProhibitedPort", "OsHint", "DeviceHint", "SysDescr", "IdentitySource", "RiskScore", "Findings", "Approved", "Owner",
+            "OsVersion", "Model", "SwitchPort", "Ipv6", "Facts",
         };
 
         public void LoadIPInfo(string filename)
@@ -136,6 +142,11 @@ namespace NetworkScanner
                         IdentitySource = Get(row, "IdentitySource"),
                         FindingsJson = Get(row, "Findings"),
                         Owner = Get(row, "Owner"),
+                        OsVersion = Get(row, "OsVersion"),
+                        Model = Get(row, "Model"),
+                        SwitchPort = Get(row, "SwitchPort"),
+                        Ipv6 = Get(row, "Ipv6"),
+                        FactsJson = Get(row, "Facts"),
                     };
                     if (int.TryParse(Get(row, "RiskScore"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int risk)) info.RiskScore = risk;
                     if (bool.TryParse(Get(row, "Approved"), out bool approvedFlag)) info.Approved = approvedFlag;
@@ -165,6 +176,7 @@ namespace NetworkScanner
                     i.Service, i.Ttl.ToString(CultureInfo.InvariantCulture), i.HasProhibitedPort.ToString(),
                     i.OsHint, i.DeviceHint, i.SysDescr, i.IdentitySource, i.RiskScore.ToString(CultureInfo.InvariantCulture), i.FindingsJson,
                     i.Approved.ToString(), i.Owner,
+                    i.OsVersion, i.Model, i.SwitchPort, i.Ipv6, i.FactsJson,
                 })).Append("\r\n");
             }
             return sb.ToString();
@@ -449,6 +461,9 @@ namespace NetworkScanner
 
             // 사용자가 지정해 둔 이름/비고를 읽어와, 스캔 중 새로 발견되는 호스트에 자동 병합한다.
             _annotations = AnnotationStore.Load();
+            _discoveredFacts.Clear();
+            _discoveredByMac.Clear();
+            _phase1Rtts.Clear();
 
             // 변화 감지 기준선: 현재 목록이 비어 있으면(재시작 직후) 이력 DB의 마지막 스캔을 쓴다.
             Dictionary<string, HostState> baseline = SnapshotStates();
@@ -482,6 +497,7 @@ namespace NetworkScanner
                     }
 
                     if (alive) aliveIps.Add(strIp);
+                    if (roundtrip.HasValue) _phase1Rtts.Add(roundtrip.Value);
                     ApplyPingResult(alive, roundtrip, ttl, strIp);
 
                     int cur = Interlocked.Increment(ref pinged);
@@ -503,7 +519,9 @@ namespace NetworkScanner
                 {
                     Message?.Invoke($"{Localization.T("scan.phase1.retry")} ({missing.Count})");
                     var stillMissing = new ConcurrentBag<string>();
-                    int retryTimeout = Options.PingTimeoutMs * 2;
+                    int retryTimeout = Options.AdaptiveTimeouts
+                        ? FactFusion.AdaptiveTimeout(_phase1Rtts.ToList(), Options.PingTimeoutMs * 2, 4, 4000)
+                        : Options.PingTimeoutMs * 2;
                     try
                     {
                         await Parallel.ForEachAsync(missing, options, async (strIp, ct) =>
@@ -536,11 +554,25 @@ namespace NetworkScanner
                     }
                     if (viaArp > 0) Message?.Invoke(string.Format(Localization.T("scan.phase1.arp"), viaArp));
                 }
+
+                // ---- 네트워크 전체 발견: SSDP/mDNS 브라우징, OS 이웃 테이블, 라우터 SNMP 테이블, 패시브 캡처 스냅샷 ----
+                // 프로브에 답하지 않는 장비라도 스스로 광고하거나(멀티캐스트) 라우터가 알고 있으면 살아있는 것으로 본다.
+                if (Options.DeepDiscovery && !token.IsCancellationRequested)
+                {
+                    var targetSet = new HashSet<string>(targets);
+                    int added = await RunNetworkDiscoveryAsync(targetSet, aliveIps, token).ConfigureAwait(false);
+                    if (added > 0) Message?.Invoke(string.Format(Localization.T("scan.discovery.found"), added));
+                }
             }
             RaiseResultsSummary();
 
             // ---- 2단계: 살아있는 호스트 부가 정보 조회 ----
-            List<string> aliveList = aliveIps.OrderBy(ip => IPRangeUtil.ToUInt32(IPAddress.Parse(ip))).ToList();
+            if (Options.AdaptiveTimeouts)
+            {
+                // 느린 세그먼트(Wi-Fi, 절전 장비)에서는 포트/프로브 타임아웃을 p95 응답시간 기준으로 늘린다.
+                Options.PortTimeoutMs = FactFusion.AdaptiveTimeout(_phase1Rtts.ToList(), Options.PortTimeoutMs, 5, 2000);
+            }
+            List<string> aliveList = aliveIps.Distinct().OrderBy(ip => IPRangeUtil.ToUInt32(IPAddress.Parse(ip))).ToList();
             if (aliveList.Count > 0 && !token.IsCancellationRequested)
             {
                 ProgressMaxChanged?.Invoke(aliveList.Count);
@@ -864,6 +896,26 @@ namespace NetworkScanner
             }
             string chosenName = HostIdentityMerge.ChooseName(hostName, identity) ?? "";
 
+            // ---- 사실 수집: 기본 출처(ARP/OUI/DNS/TTL/배너/식별 프로브) + 핑거프린트 프로브(SMB/SSH/HTTP/UDP) + 네트워크 발견 + 이전 스캔 ----
+            HostFacts facts = BuildBaseFacts(targetIp, mac, vendor, hostName, measuredTtl, service, identity);
+            if (Options.DeepDiscovery && _services.FactProbes.Count > 0)
+            {
+                IReadOnlyList<int> portsForProbes = usePortChecking ? open : new List<int> { -1 };
+                await RunFactProbesAsync(targetIp, portsForProbes, facts, ct).ConfigureAwait(false);
+            }
+            if (_discoveredFacts.TryGetValue(targetIp, out HostFacts? discovered)) facts.AddRange(discovered.All);
+            string macForJoin = facts.BestValue(FactFields.Mac);
+            if (!string.IsNullOrEmpty(macForJoin) && _discoveredByMac.TryGetValue(macForJoin, out List<Fact>? byMacFacts)) facts.AddRange(byMacFacts);
+            if (Options.MergeHistoryFacts && _services.History != null)
+            {
+                try
+                {
+                    string prevJson = _services.History.GetLastFactsJson(targetIp);
+                    if (prevJson.Length > 0) FactFusion.MergeHistory(facts, HostFacts.FromJson(targetIp, prevJson));
+                }
+                catch (Exception ex) { AppLogger.LogDebug("NetworkScanner", "history facts unavailable: " + ex.Message); }
+            }
+
             bool changed = false;
             lock (_itemsLock)
             {
@@ -899,11 +951,112 @@ namespace NetworkScanner
                         info.RiskScore = riskScore;
                         info.FindingsJson = findingsJson;
                     }
+                    FactFusion.ApplyTo(facts, info, m => _oui.GetVender(m));
                     changed = true;
                 }
             }
 
             if (changed) ItemsRefreshNeeded?.Invoke();
+        }
+
+        // 엔진이 직접 아는 사실을 Fact로 옮긴다(출처·신뢰도 표기용).
+        private static HostFacts BuildBaseFacts(string ip, string? mac, string vendor, string? dnsName, int ttl, string banner, HostIdentity? identity)
+        {
+            var facts = new HostFacts(ip);
+            facts.Add(FactFields.Mac, mac, FactFusion.SourceArp, Confidence.High);
+            if (!string.IsNullOrEmpty(vendor) && vendor != Localization.T("vendor.private")) facts.Add(FactFields.Vendor, vendor, FactFusion.SourceOui, Confidence.High);
+            if (!string.IsNullOrEmpty(dnsName) && dnsName != ip) facts.Add(FactFields.Name, dnsName, FactFusion.SourceDns, Confidence.Medium);
+            if (ttl > 0) facts.Add(FactFields.Os, OsGuesser.FromTtl(ttl), FactFusion.SourceTtl, Confidence.Low);
+            if (!string.IsNullOrEmpty(banner)) facts.Add(FactFields.Service, banner, FactFusion.SourceBanner, Confidence.High);
+            if (identity != null)
+            {
+                string src = identity.Source;
+                facts.Add(FactFields.Name, identity.Name, src, Confidence.High);
+                facts.Add(FactFields.Description, identity.Description, src, Confidence.High);
+                facts.Add(FactFields.Os, identity.OsHint, src, Confidence.Medium);
+                facts.Add(FactFields.DeviceType, identity.DeviceHint, src, Confidence.Medium);
+                if (identity.Attributes.TryGetValue(HostIdentity.AttrNetBiosMac, out string? nbMac)) facts.Add(FactFields.Mac, nbMac, src, Confidence.High);
+                if (identity.Attributes.TryGetValue(HostIdentity.AttrNetBiosWorkgroup, out string? wg)) facts.Add(FactFields.Domain, wg, src, Confidence.High);
+            }
+            return facts;
+        }
+
+        // 호스트별 핑거프린트 프로브(SMB/SSH/HTTP/UDP)를 동시에 돌린다. 하나가 실패해도 나머지는 계속된다.
+        private async Task RunFactProbesAsync(string ip, IReadOnlyList<int> openPorts, HostFacts facts, CancellationToken ct)
+        {
+            var tasks = _services.FactProbes.Select(async p =>
+            {
+                try { return await p.ProbeAsync(ip, openPorts, Options.FactProbeTimeoutMs, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { AppLogger.LogDebug("NetworkScanner", $"{p.Name} failed for {ip}: {ex.Message}"); return (IReadOnlyList<Fact>)Array.Empty<Fact>(); }
+            }).ToList();
+            foreach (IReadOnlyList<Fact> result in await Task.WhenAll(tasks).ConfigureAwait(false)) facts.AddRange(result);
+        }
+
+        // 네트워크 전체 발견을 모두 돌려 IP별 사실을 모으고, 프로브에 답하지 않았지만 발견된 대상 호스트를 살아있는 것으로 추가한다.
+        private async Task<int> RunNetworkDiscoveryAsync(HashSet<string> targets, ConcurrentBag<string> aliveIps, CancellationToken token)
+        {
+            if (_services.NetworkDiscoveries.Count == 0 && _services.PassiveSnapshot == null) return 0;
+            Message?.Invoke(Localization.T("scan.discovery.start"));
+
+            var tasks = _services.NetworkDiscoveries.Select(async d =>
+            {
+                try { return await d.DiscoverAsync(Options.DiscoveryTimeoutMs, token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    AppLogger.LogWarn("NetworkScanner", $"{d.Name} discovery failed: {ex.Message}");
+                    return (IReadOnlyDictionary<string, IReadOnlyList<Fact>>)new Dictionary<string, IReadOnlyList<Fact>>();
+                }
+            }).ToList();
+
+            var byMac = new Dictionary<string, List<Fact>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var result in await Task.WhenAll(tasks).ConfigureAwait(false))
+            {
+                foreach (var kv in result)
+                {
+                    if (kv.Key.StartsWith("mac:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!byMac.TryGetValue(kv.Key.Substring(4), out var list)) byMac[kv.Key.Substring(4)] = list = new List<Fact>();
+                        list.AddRange(kv.Value);
+                        continue;
+                    }
+                    if (!IPAddress.TryParse(kv.Key, out _)) continue; // "lldp:…", "v6:…" 같은 보조 키는 호스트에 직접 붙이지 않는다
+                    HostFacts facts = _discoveredFacts.GetOrAdd(kv.Key, k => new HostFacts(k));
+                    lock (facts) facts.AddRange(kv.Value);
+                }
+            }
+            if (_services.PassiveSnapshot != null)
+            {
+                try
+                {
+                    foreach (var kv in _services.PassiveSnapshot())
+                    {
+                        HostFacts facts = _discoveredFacts.GetOrAdd(kv.Key, k => new HostFacts(k));
+                        lock (facts) facts.AddRange(kv.Value.All);
+                    }
+                }
+                catch (Exception ex) { AppLogger.LogWarn("NetworkScanner", "passive snapshot failed: " + ex.Message); }
+            }
+
+            // MAC으로만 알려진 사실(스위치 포트 등)은 2단계에서 각 호스트의 MAC이 확인될 때 붙인다.
+            foreach (var kv in byMac) _discoveredByMac[kv.Key] = kv.Value;
+
+            // 발견된 대상 호스트 중 아직 죽은 것으로 되어 있는 것을 살린다. 멀티캐스트 응답/캡처는 확실하고, 테이블은 "라우터가 아는" 수준.
+            var aliveSet = new HashSet<string>(aliveIps);
+            int added = 0;
+            foreach (var kv in _discoveredFacts)
+            {
+                if (!targets.Contains(kv.Key) || aliveSet.Contains(kv.Key)) continue;
+                bool direct = kv.Value.All.Any(f => f.Source.StartsWith("SSDP", StringComparison.OrdinalIgnoreCase) || f.Source.StartsWith("mDNS", StringComparison.OrdinalIgnoreCase)
+                                                     || f.Source.StartsWith("pcap", StringComparison.OrdinalIgnoreCase) || f.Source.StartsWith("ARP-probe", StringComparison.OrdinalIgnoreCase));
+                bool table = kv.Value.All.Any(f => f.Field == "seenBy" || f.Source.StartsWith("SNMP-table", StringComparison.OrdinalIgnoreCase) || f.Source.StartsWith("neighbor", StringComparison.OrdinalIgnoreCase));
+                if (!direct && !table) continue;
+                aliveIps.Add(kv.Key);
+                ApplyPingResult(true, null, 0, kv.Key, direct ? "MCAST" : "TABLE");
+                added++;
+            }
+            return added;
         }
 
         private static readonly System.Text.Json.JsonSerializerOptions FindingsJsonOptions = new()
