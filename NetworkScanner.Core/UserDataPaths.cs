@@ -4,7 +4,7 @@ using System.IO;
 
 namespace NetworkScanner
 {
-    // 사용자 데이터(setting.ini, iprange.ini, annotations.ini, env/ 스캔 결과)의 저장 위치.
+    // 사용자 데이터(settings.json, history.db, env/ 스캔 결과 등)의 저장 위치.
     // 예전에는 작업 디렉터리에 저장했지만, Velopack 설치본은 업데이트 때 앱 폴더가 통째로
     // 교체되어 그 안의 데이터가 유실된다. 그래서 사용자 프로필의 고정 폴더에 저장하고,
     // 예전 위치에 파일이 남아 있으면 최초 1회 복사해 온다(기존 사용자 값 유지).
@@ -46,7 +46,7 @@ namespace NetworkScanner
             {
                 AppSettingsStore.SettingFileName,
                 AppSettingsStore.IPRangeFileName,
-                AnnotationStore.FileName,
+                History.ScanHistoryStore.LegacyAnnotationsFileName, // 새 위치의 history.db가 열릴 때 hosts.note로 이관된다
             };
 
             foreach (string dir in candidates)

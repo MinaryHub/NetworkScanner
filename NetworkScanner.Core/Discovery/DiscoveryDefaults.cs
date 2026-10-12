@@ -30,8 +30,8 @@ namespace NetworkScanner.Discovery
             return probes;
         }
 
-        // targets: 능동 ARP 대상(스캔 대역). 비어 있으면 능동 ARP는 넣지 않는다.
-        public static IReadOnlyList<INetworkDiscovery> BuildNetworkDiscoveries(DiscoverySettings d, string snmpCommunity, IEnumerable<IPAddress>? targets = null)
+        // 능동 ARP(ITargetedNetworkDiscovery)는 대상 목록을 엔진이 스캔마다 넘기므로 여기서는 지원 여부만 본다.
+        public static IReadOnlyList<INetworkDiscovery> BuildNetworkDiscoveries(DiscoverySettings d, string snmpCommunity)
         {
             var list = new List<INetworkDiscovery>();
             if (d.Ssdp) list.Add(new SsdpDiscovery());
@@ -46,11 +46,7 @@ namespace NetworkScanner.Discovery
             }
             if (agents.Count > 0) list.Add(new SnmpInfrastructureDiscovery(agents));
 
-            if (d.ActiveArp && ActiveArpProber.IsSupported && targets != null)
-            {
-                var t = targets.ToList();
-                if (t.Count > 0) list.Add(new ActiveArpDiscovery(t));
-            }
+            if (d.ActiveArp && ActiveArpProber.IsSupported) list.Add(new ActiveArpDiscovery());
             return list;
         }
 

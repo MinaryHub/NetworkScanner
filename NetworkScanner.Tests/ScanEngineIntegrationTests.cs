@@ -203,6 +203,46 @@ namespace NetworkScanner.Tests
         }
 
         [Fact]
+        public async Task Scan_FillsDescriptionFromInventoryNote_AndPersistsEditedDescriptions()
+        {
+            string db = Path.Combine(_root, "notes.db");
+            using var history = new ScanHistoryStore(db);
+            history.SetHostNotes(new[] { new KeyValuePair<string, string>("10.9.0.5", "프린터 옆 PC") });
+
+            var pinger = new FakePinger();
+            pinger.Alive.Add("10.9.0.5");
+            pinger.Alive.Add("10.9.0.7");
+            var services = new ScanServices { Pinger = pinger, Ports = new FakePorts(), Arp = new FakeArp(), Dns = ScanServices.CreateOffline().Dns, History = history, IdentityDisabled = true, Ttl = new NetworkScanner.Network.NullTtlProber() };
+            var engine = new ScanEngine(new IPInfoList(), new OUIInfo(), Config(ports: false), services);
+
+            await engine.DoScanAllRange(false, "sys", CancellationToken.None);
+
+            // 인벤토리 비고 → 새로 발견된 호스트의 비어 있는 Description.
+            Assert.Equal("프린터 옆 PC", engine.Items.GetItem("10.9.0.5")!.Description);
+            Assert.Equal("", engine.Items.GetItem("10.9.0.7")!.Description);
+
+            // 사용자가 편집한 Description은 저장(CSV) 시 hosts.note로 간다. 비어 있는 값은 쓰지 않는다.
+            engine.Items.GetItem("10.9.0.7")!.Description = "방문자 노트북";
+            engine.Items.GetItem("10.9.0.5")!.Description = "";
+            await engine.WriteIPInfo(false, "sys");
+            var notes = history.GetHostNotes();
+            Assert.Equal("방문자 노트북", notes["10.9.0.7"]);
+            Assert.Equal("프린터 옆 PC", notes["10.9.0.5"]);
+
+            // 다음 스캔이 끝나면 그 사이 바뀐 Description도 저장된다.
+            engine.Items.GetItem("10.9.0.7")!.Description = "방문자 노트북(2)";
+            await engine.DoScanAllRange(false, "sys", CancellationToken.None);
+            Assert.Equal("방문자 노트북(2)", history.GetHostNotes()["10.9.0.7"]);
+
+            // CSV를 다시 읽을 때 비어 있는 Description은 인벤토리 비고로 채워진다.
+            string csv = Directory.GetFiles(ScanEngine.GetEnvDirectory(), "*.csv").Single();
+            var engine2 = new ScanEngine(new IPInfoList(), new OUIInfo(), Config(ports: false), services);
+            engine2.LoadIPInfo(csv);
+            Assert.Equal("프린터 옆 PC", engine2.Items.GetItem("10.9.0.5")!.Description);
+            Assert.Equal("방문자 노트북", engine2.Items.GetItem("10.9.0.7")!.Description); // CSV에 있던 값이 우선
+        }
+
+        [Fact]
         public async Task Scan_CountsHostsKnownToArpCache_AsAlive_WhenPingAndTcpFail()
         {
             // 절전 중인 폰처럼 ICMP/TCP에 답하지 않아도 ARP 캐시에 MAC이 있으면 살아있는 것으로 본다(응답시간 "ARP").

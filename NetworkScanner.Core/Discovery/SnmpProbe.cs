@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using NetworkScanner.Discovery.Infrastructure;
 
 namespace NetworkScanner.Discovery
 {
@@ -19,36 +20,25 @@ namespace NetworkScanner.Discovery
         private static readonly string[] Oids = { OidSysDescr, OidSysObjectId, OidSysName, OidSysLocation };
 
         private readonly string _community;
-        private readonly int _port;
+        private readonly SnmpWalker _walker;
 
         public SnmpProbe(string community = "public") : this(community, DefaultPort) { }
 
         internal SnmpProbe(string community, int port)
         {
             _community = string.IsNullOrEmpty(community) ? "public" : community;
-            _port = port;
+            _walker = new SnmpWalker(port);
         }
 
         public string Name => HostIdentity.SourceSnmp;
 
+        // 전송·재시도·요청 ID 대조는 SnmpWalker.GetAsync(시도당 timeoutMs/2, 2회)가 맡는다.
         public async Task<HostIdentity?> ProbeAsync(IPAddress ip, int timeoutMs, CancellationToken ct)
         {
             try
             {
-                int requestId = Random.Shared.Next(1, int.MaxValue);
-                byte[] request = SnmpCodec.BuildGetRequest(_community, requestId, Oids);
-                Dictionary<string, string>? values = null;
-
-                byte[]? reply = await UdpExchange.SendReceiveAsync(ip, _port, request, timeoutMs, attempts: 2, data =>
-                {
-                    // 요청 ID가 다른 응답(이전 시도의 늦은 응답 등)은 무시한다.
-                    if (!SnmpCodec.TryParseResponse(data, out int id, out var parsed) || id != requestId) return false;
-                    values = parsed;
-                    return true;
-                }, ct).ConfigureAwait(false);
-
-                if (reply == null || values == null) return null;
-                return FromValues(values);
+                IReadOnlyDictionary<string, string>? values = await _walker.GetAsync(ip, _community, Oids, Math.Max(1, timeoutMs / 2), ct).ConfigureAwait(false);
+                return values == null ? null : FromValues(values);
             }
             catch
             {

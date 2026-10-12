@@ -29,7 +29,8 @@ namespace NetworkScanner
         // 병렬 스캔 중 결과 목록 쓰기를 직렬화한다. UI는 이 락을 잡고 스냅샷을 만든다.
         private readonly object _itemsLock = new();
         private CancellationTokenSource? _scanCts;
-        private Dictionary<string, AnnotationStore.Annotation> _annotations = new();
+        // 인벤토리(hosts.note)에 저장된 IP별 비고. 스캔 시작 시 읽어 새로 발견되는 호스트의 비어 있는 Description을 채운다.
+        private Dictionary<string, string> _notes = new();
         private List<int> _userPorts = new();
         private IIdentityProbe? _identity;
         private bool _identityBuilt;
@@ -90,6 +91,7 @@ namespace NetworkScanner
             {
                 string text = File.ReadAllText(filename, Encoding.UTF8);
                 List<IPInfo> parsed = ParseCsv(text);
+                FillDescriptions(parsed, LoadHostNotes());
                 lock (_itemsLock)
                 {
                     _items.Clear();
@@ -216,8 +218,8 @@ namespace NetworkScanner
                 string full = Path.Combine(path, filename);
                 await File.WriteAllTextAsync(full, BuildCsv(snapshot), new UTF8Encoding(false)).ConfigureAwait(false);
 
-                // 사용자가 지정한 이름/비고를 IP 기준으로 보관해 다음 스캔/재시작 후에도 유지되게 한다.
-                AnnotationStore.Save(snapshot);
+                // 사용자가 입력한 비고를 인벤토리(hosts.note)에 보관해 다음 스캔/재시작 후에도 유지되게 한다.
+                PersistDescriptions(snapshot);
 
                 Message?.Invoke(string.Format(Localization.T("msg.file.saved"), filename));
                 await UploadAsync(full).ConfigureAwait(false);
@@ -368,8 +370,6 @@ namespace NetworkScanner
             Message?.Invoke(string.Format(Localization.T("ping.manual"), ip, status));
         }
 
-        public void PingOnce(string ip) => _ = PingOnceAsync(ip);
-
         private async Task DoCheckPortList(string ip, List<int> ports, string startKey, CancellationToken token)
         {
             IPInfo? ipInfo;
@@ -459,8 +459,8 @@ namespace NetworkScanner
             }
             var options = new ParallelOptions { MaxDegreeOfParallelism = Options.Parallelism, CancellationToken = token };
 
-            // 사용자가 지정해 둔 이름/비고를 읽어와, 스캔 중 새로 발견되는 호스트에 자동 병합한다.
-            _annotations = AnnotationStore.Load();
+            // 인벤토리에 저장된 비고를 읽어와, 스캔 중 새로 발견되는 호스트에 자동 병합한다.
+            _notes = LoadHostNotes();
             _discoveredFacts.Clear();
             _discoveredByMac.Clear();
             _phase1Rtts.Clear();
@@ -560,7 +560,7 @@ namespace NetworkScanner
                 if (Options.DeepDiscovery && !token.IsCancellationRequested)
                 {
                     var targetSet = new HashSet<string>(targets);
-                    int added = await RunNetworkDiscoveryAsync(targetSet, aliveIps, token).ConfigureAwait(false);
+                    int added = await RunNetworkDiscoveryAsync(targetSet, targets.Select(IPAddress.Parse).ToList(), aliveIps, token).ConfigureAwait(false);
                     if (added > 0) Message?.Invoke(string.Format(Localization.T("scan.discovery.found"), added));
                 }
             }
@@ -599,6 +599,9 @@ namespace NetworkScanner
             if (!cancelled)
             {
                 RecordHistory(started, finished, systemName, scheduling);
+                List<IPInfo> finalSnapshot;
+                lock (_itemsLock) finalSnapshot = new List<IPInfo>(_items);
+                PersistDescriptions(finalSnapshot);
                 IReadOnlyDictionary<string, ApprovedHost>? approved = LoadApprovedHosts(baseline.Count == 0);
                 ApplyApprovals(approved);
 
@@ -703,6 +706,55 @@ namespace NetworkScanner
             catch (Exception ex)
             {
                 AppLogger.LogError("NetworkScanner", string.Format(Localization.T("msg.history.failed"), ex.Message));
+            }
+        }
+
+        // 인벤토리의 비고(hosts.note). 이력 저장소가 없거나 실패하면 빈 사전.
+        private Dictionary<string, string> LoadHostNotes()
+        {
+            if (_services.History == null) return new Dictionary<string, string>();
+            try
+            {
+                return new Dictionary<string, string>(_services.History.GetHostNotes());
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogWarn("NetworkScanner", "host notes unavailable: " + ex.Message);
+                return new Dictionary<string, string>();
+            }
+        }
+
+        // 비어 있는 Description만 인벤토리 비고로 채운다(사용자가 이미 입력한 값은 유지).
+        private static void FillDescriptions(IEnumerable<IPInfo> items, IReadOnlyDictionary<string, string> notes)
+        {
+            if (notes.Count == 0) return;
+            foreach (IPInfo i in items)
+            {
+                if (string.IsNullOrEmpty(i.Description) && notes.TryGetValue(i.Ip, out string? note)) i.Description = note;
+            }
+        }
+
+        // 비어 있지 않은 Description을 인벤토리 비고(hosts.note)에 저장한다. 값이 바뀐 호스트만 쓴다.
+        private void PersistDescriptions(IReadOnlyList<IPInfo> snapshot)
+        {
+            if (_services.History == null) return;
+            try
+            {
+                Dictionary<string, string> current = LoadHostNotes();
+                var changed = new List<KeyValuePair<string, string>>();
+                foreach (IPInfo i in snapshot)
+                {
+                    if (string.IsNullOrEmpty(i.Ip) || string.IsNullOrEmpty(i.Description)) continue;
+                    if (current.TryGetValue(i.Ip, out string? old) && old == i.Description) continue;
+                    changed.Add(new KeyValuePair<string, string>(i.Ip, i.Description));
+                    current[i.Ip] = i.Description;
+                }
+                if (changed.Count > 0) _services.History.SetHostNotes(changed);
+                _notes = current;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogWarn("NetworkScanner", "host notes save failed: " + ex.Message);
             }
         }
 
@@ -837,12 +889,8 @@ namespace NetworkScanner
                         Service = "",
                         Ttl = ttl,
                     };
-                    // 사용자가 이전에 지정한 이름/비고가 있으면 새 호스트에 자동으로 채운다.
-                    if (_annotations.TryGetValue(targetIp, out var note))
-                    {
-                        added.SystemName = note.Name;
-                        added.Description = note.Description;
-                    }
+                    // 인벤토리에 비고가 있으면 새 호스트에 자동으로 채운다.
+                    if (_notes.TryGetValue(targetIp, out string? note)) added.Description = note;
                     _items.Add(added);
                     changed = true;
                 }
@@ -927,22 +975,10 @@ namespace NetworkScanner
                     if (measuredTtl > 0) info.Ttl = measuredTtl;
                     if (string.IsNullOrEmpty(info.SystemName) && !string.IsNullOrEmpty(chosenName) && chosenName != targetIp)
                         info.SystemName = chosenName;
-                    if (identity != null)
-                    {
-                        info.IdentitySource = identity.Source;
-                        if (!string.IsNullOrEmpty(identity.Description)) info.SysDescr = identity.Description;
-                        if (!string.IsNullOrEmpty(identity.OsHint)) info.OsHint = identity.OsHint;
-                        if (!string.IsNullOrEmpty(identity.DeviceHint)) info.DeviceHint = identity.DeviceHint;
-                        if (string.IsNullOrEmpty(info.Macaddr) && identity.Attributes.TryGetValue(HostIdentity.AttrNetBiosMac, out string? nbMac) && !string.IsNullOrEmpty(nbMac))
-                        {
-                            info.Macaddr = nbMac;
-                            info.Vendor = _oui.GetVender(nbMac);
-                        }
-                    }
-                    else if (!string.IsNullOrEmpty(hostName) && hostName != targetIp)
-                    {
-                        info.IdentitySource = "DNS";
-                    }
+                    if (string.IsNullOrEmpty(info.Description) && _notes.TryGetValue(targetIp, out string? note)) info.Description = note;
+                    // 식별 프로브의 값(sysDescr/OS/종류/NetBIOS MAC)은 BuildBaseFacts를 거쳐 FactFusion.ApplyTo가 반영한다. 출처만 여기서.
+                    if (identity != null) info.IdentitySource = identity.Source;
+                    else if (!string.IsNullOrEmpty(hostName) && hostName != targetIp) info.IdentitySource = "DNS";
                     if (usePortChecking)
                     {
                         info.Ports = openPorts;
@@ -994,14 +1030,20 @@ namespace NetworkScanner
         }
 
         // 네트워크 전체 발견을 모두 돌려 IP별 사실을 모으고, 프로브에 답하지 않았지만 발견된 대상 호스트를 살아있는 것으로 추가한다.
-        private async Task<int> RunNetworkDiscoveryAsync(HashSet<string> targets, ConcurrentBag<string> aliveIps, CancellationToken token)
+        // 대상 목록이 필요한 발견(능동 ARP 등, ITargetedNetworkDiscovery)에는 이번 스캔의 대상 IP를 넘긴다.
+        private async Task<int> RunNetworkDiscoveryAsync(HashSet<string> targets, IReadOnlyList<IPAddress> targetAddresses, ConcurrentBag<string> aliveIps, CancellationToken token)
         {
             if (_services.NetworkDiscoveries.Count == 0 && _services.PassiveSnapshot == null) return 0;
             Message?.Invoke(Localization.T("scan.discovery.start"));
 
             var tasks = _services.NetworkDiscoveries.Select(async d =>
             {
-                try { return await d.DiscoverAsync(Options.DiscoveryTimeoutMs, token).ConfigureAwait(false); }
+                try
+                {
+                    return d is ITargetedNetworkDiscovery targeted
+                        ? await targeted.DiscoverAsync(targetAddresses, Options.DiscoveryTimeoutMs, token).ConfigureAwait(false)
+                        : await d.DiscoverAsync(Options.DiscoveryTimeoutMs, token).ConfigureAwait(false);
+                }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
                 {
@@ -1072,12 +1114,7 @@ namespace NetworkScanner
             _identityBuilt = true;
             if (_services.IdentityDisabled || !Options.IdentityProbes) return _identity = _services.Identity;
             if (_services.Identity != null) return _identity = _services.Identity;
-
-            var probes = new List<IIdentityProbe>();
-            if (Options.NetBiosEnabled) probes.Add(new NetBiosProbe());
-            if (Options.MdnsEnabled) probes.Add(new MdnsProbe());
-            if (Options.SnmpEnabled) probes.Add(new SnmpProbe(Options.SnmpCommunity));
-            return _identity = probes.Count == 0 ? null : new CompositeIdentityProbe(probes);
+            return _identity = CompositeIdentityProbe.Create(Options.SnmpEnabled, Options.MdnsEnabled, Options.NetBiosEnabled, Options.SnmpCommunity);
         }
 
         private async Task<string> GrabServiceAsync(string ip, List<int> open, CancellationToken ct)

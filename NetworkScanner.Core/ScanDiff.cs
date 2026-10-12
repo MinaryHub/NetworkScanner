@@ -66,8 +66,8 @@ namespace NetworkScanner
                 // 새 포트는 이전에 알던 호스트에 대해서만 의미가 있다(새 호스트는 NewHost로 이미 알림).
                 if (prev != null && !firstScan)
                 {
-                    HashSet<int> before = ParsePorts(prev.Ports);
-                    foreach (int port in ParsePorts(cur.Ports))
+                    var before = new HashSet<int>(Network.ProbeExtensions.ParsePorts(prev.Ports));
+                    foreach (int port in Network.ProbeExtensions.ParsePorts(cur.Ports))
                         if (!before.Contains(port))
                             changes.Add(new ScanChange(ScanChangeType.NewOpenPort, ip, port.ToString()));
                 }
@@ -136,15 +136,5 @@ namespace NetworkScanner
         {
             ScanChangeType.ProhibitedPort, ScanChangeType.UnapprovedHost, ScanChangeType.ApprovedMacMismatch, ScanChangeType.HighRisk,
         };
-
-        private static HashSet<int> ParsePorts(string? field)
-        {
-            var set = new HashSet<int>();
-            if (string.IsNullOrEmpty(field)) return set;
-            foreach (string token in field.Split('/', StringSplitOptions.RemoveEmptyEntries))
-                if (int.TryParse(token, out int port))
-                    set.Add(port);
-            return set;
-        }
     }
 }

@@ -19,17 +19,6 @@ namespace NetworkScanner
 
         public UploadSettings Upload { get; set; } = new UploadSettings();
 
-        // 이전 코드와의 호환용 별칭. 새 코드는 Upload.*를 쓴다.
-        [JsonIgnore] public bool UseFTP { get => Upload.Enabled; set => Upload.Enabled = value; }
-        [JsonIgnore] public string FtpIp { get => Upload.Host; set => Upload.Host = value; }
-        [JsonIgnore] public string FtpId { get => Upload.User; set => Upload.User = value; }
-        [JsonIgnore] public string FtpPassword { get => Upload.Password; set => Upload.Password = value; }
-        [JsonIgnore] public string FtpPort
-        {
-            get => Upload.Port > 0 ? Upload.Port.ToString() : "";
-            set => Upload.Port = int.TryParse(value, out int p) ? p : 0;
-        }
-
         public string SystemName { get; set; } = "";
         public string PortList { get; set; } = "22/80/8080";
         public bool UsePortChecking { get; set; }
@@ -128,15 +117,10 @@ namespace NetworkScanner
                 if (string.IsNullOrWhiteSpace(SystemName)) errors.Add(Localization.T("settings.invalid.systemname"));
             }
 
-            if (ContinuousMonitoring && UseScheduling)
-            {
-                // 둘 다 켜도 동작은 하지만 의도치 않은 중복 스캔이므로 경고 수준으로 알린다.
-            }
-
             return errors;
         }
 
-        public static bool IsValidHost(string? host)
+        private static bool IsValidHost(string? host)
         {
             if (string.IsNullOrWhiteSpace(host)) return false;
             if (IPAddress.TryParse(host, out _)) return true;
@@ -205,9 +189,5 @@ namespace NetworkScanner
         [JsonIgnore] public string SmtpPassword { get; set; } = "";    // ISecretStore에 저장
         public string MailFrom { get; set; } = "";
         public string MailTo { get; set; } = "";          // 쉼표 구분
-
-        [JsonIgnore] public bool AnyChannelConfigured =>
-            !string.IsNullOrWhiteSpace(WebhookUrl) || !string.IsNullOrWhiteSpace(SyslogHost)
-            || (!string.IsNullOrWhiteSpace(SmtpHost) && !string.IsNullOrWhiteSpace(MailTo));
     }
 }

@@ -15,7 +15,6 @@ namespace NetworkScanner.Discovery.Fingerprint
         public const uint FlagRequestTarget = 0x00000004;
         public const uint FlagNtlm = 0x00000200;
         public const uint FlagAlwaysSign = 0x00008000;
-        public const uint FlagTargetTypeDomain = 0x00010000;
         public const uint FlagTargetTypeServer = 0x00020000;
         public const uint FlagExtendedSessionSecurity = 0x00080000;
         public const uint FlagTargetInfo = 0x00800000;
@@ -31,9 +30,6 @@ namespace NetworkScanner.Discovery.Fingerprint
         public const ushort AvNbDomainName = 0x0002;
         public const ushort AvDnsComputerName = 0x0003;
         public const ushort AvDnsDomainName = 0x0004;
-        public const ushort AvDnsTreeName = 0x0005;
-        public const ushort AvFlags = 0x0006;
-        public const ushort AvTimestamp = 0x0007;
 
         private static readonly byte[] Signature = { (byte)'N', (byte)'T', (byte)'L', (byte)'M', (byte)'S', (byte)'S', (byte)'P', 0 };
         private const uint TypeNegotiate = 1, TypeChallenge = 2;
@@ -55,10 +51,6 @@ namespace NetworkScanner.Discovery.Fingerprint
             public string? NbDomainName => AvString(AvNbDomainName);
             public string? DnsComputerName => AvString(AvDnsComputerName);
             public string? DnsDomainName => AvString(AvDnsDomainName);
-            public string? DnsTreeName => AvString(AvDnsTreeName);
-
-            // 이름이 담긴 AV_PAIR가 하나라도 있는지.
-            public bool HasNameAvPairs => NbComputerName != null || NbDomainName != null || DnsComputerName != null || DnsDomainName != null;
 
             private string? AvString(ushort id)
             {
@@ -87,9 +79,6 @@ namespace NetworkScanner.Discovery.Fingerprint
             WriteVersion(s.Slice(32), new Version(10, 0, 19045));
             return msg;
         }
-
-        public static bool IsNegotiateMessage(ReadOnlySpan<byte> msg)
-            => msg.Length >= 16 && msg.Slice(0, 8).SequenceEqual(Signature) && BinaryPrimitives.ReadUInt32LittleEndian(msg.Slice(8)) == TypeNegotiate;
 
         // ---------- CHALLENGE_MESSAGE ----------
 

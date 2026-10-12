@@ -258,26 +258,23 @@ namespace NetworkScanner.Discovery.Infrastructure
         }
     }
 
-    // 능동 ARP 프로브를 INetworkDiscovery로 감싼다. 대상 목록은 생성자로 받는다(보통 스캔 대역의 IPv4 전체).
-    public sealed class ActiveArpDiscovery : INetworkDiscovery
+    // 능동 ARP 프로브를 ITargetedNetworkDiscovery로 감싼다. 대상 목록(보통 스캔 대역의 IPv4 전체)은 엔진이 스캔마다 넘긴다.
+    public sealed class ActiveArpDiscovery : ITargetedNetworkDiscovery
     {
-        private readonly IPAddress[] _targets;
-
-        public ActiveArpDiscovery(IEnumerable<IPAddress> targets)
-        {
-            _targets = targets.Where(t => t != null).ToArray();
-        }
-
         public string Name => InfrastructureFacts.SourceArpProbe;
 
         public static bool IsSupported => ActiveArpProber.IsSupported;
 
-        public async Task<IReadOnlyDictionary<string, IReadOnlyList<Fact>>> DiscoverAsync(int timeoutMs, CancellationToken ct)
+        // 대상 없이 호출되면 할 일이 없다(ARP는 누구에게 물을지 알아야 한다).
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<Fact>>> DiscoverAsync(int timeoutMs, CancellationToken ct)
+            => Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<Fact>>>(new Dictionary<string, IReadOnlyList<Fact>>(StringComparer.Ordinal));
+
+        public async Task<IReadOnlyDictionary<string, IReadOnlyList<Fact>>> DiscoverAsync(IReadOnlyList<IPAddress> targets, int timeoutMs, CancellationToken ct)
         {
             var result = new Dictionary<string, IReadOnlyList<Fact>>(StringComparer.Ordinal);
-            if (!ActiveArpProber.IsSupported || _targets.Length == 0) return result;
+            if (!ActiveArpProber.IsSupported || targets == null || targets.Count == 0) return result;
 
-            IReadOnlyDictionary<string, string> replies = await ActiveArpProber.ProbeAsync(_targets, timeoutMs, ct).ConfigureAwait(false);
+            IReadOnlyDictionary<string, string> replies = await ActiveArpProber.ProbeAsync(targets, timeoutMs, ct).ConfigureAwait(false);
             const string source = InfrastructureFacts.SourceArpProbe;
             foreach (var (ip, mac) in replies)
             {

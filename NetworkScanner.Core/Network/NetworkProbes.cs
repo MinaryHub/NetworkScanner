@@ -99,9 +99,14 @@ namespace NetworkScanner.Network
             }
         }
 
+        // 평문 HTTP 포트. 443/8443 같은 TLS 포트는 평문 HEAD가 통하지 않으므로 여기 두지 않는다(HttpProbe/TlsInspector가 다룬다).
+        private static readonly int[] PlainHttpPorts = { 80, 8080, 8000 };
+        private static readonly int[] TlsPorts = { 443, 8443 };
+
         // HTTP 계열은 HEAD 요청을 보내 Server 헤더를, SSH/FTP/SMTP 등은 서버가 먼저 보내는 인사말을 읽는다.
         public async Task<string> GrabBannerAsync(string ip, int port, int timeoutMs, CancellationToken ct)
         {
+            if (Array.IndexOf(TlsPorts, port) >= 0) return ""; // TLS 핸드셰이크 없이는 배너가 없다 — 타임아웃만 낭비한다
             try
             {
                 using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -109,7 +114,7 @@ namespace NetworkScanner.Network
                 cts.CancelAfter(timeoutMs);
                 await socket.ConnectAsync(ip, port, cts.Token).ConfigureAwait(false);
 
-                bool http = port is 80 or 8080 or 8000 or 443 or 8443;
+                bool http = Array.IndexOf(PlainHttpPorts, port) >= 0;
                 if (http)
                 {
                     byte[] req = Encoding.ASCII.GetBytes($"HEAD / HTTP/1.0\r\nHost: {ip}\r\n\r\n");

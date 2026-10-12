@@ -1,9 +1,10 @@
 using System;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using NetworkScanner;
+using NetworkScanner.Network;
 
 namespace NetworkScanner.Tests
 {
@@ -72,39 +73,18 @@ namespace NetworkScanner.Tests
         }
     }
 
-    public class AnnotationStoreTests
-    {
-        [Fact]
-        public void SaveThenLoad_RoundTripsNameAndDescription()
-        {
-            // 사용자 프로필의 실제 데이터를 건드리지 않도록 저장 위치를 테스트 폴더로 돌린다.
-            UserDataPaths.OverrideRoot = Directory.GetCurrentDirectory();
-            string path = UserDataPaths.Resolve(AnnotationStore.FileName);
-            File.Delete(path);
-            try
-            {
-                var items = new IPInfoList
-                {
-                    new IPInfo { Ip = "10.0.0.1", SystemName = "회의실 PC", Description = "3층, 담당: 홍길동" },
-                    new IPInfo { Ip = "10.0.0.2", SystemName = "", Description = "" }, // 빈 값은 저장하지 않음
-                };
-                AnnotationStore.Save(items);
-
-                var loaded = AnnotationStore.Load();
-                Assert.True(loaded.ContainsKey("10.0.0.1"));
-                Assert.Equal("회의실 PC", loaded["10.0.0.1"].Name);
-                Assert.Equal("3층, 담당: 홍길동", loaded["10.0.0.1"].Description);
-                Assert.False(loaded.ContainsKey("10.0.0.2"));
-            }
-            finally
-            {
-                File.Delete(path);
-            }
-        }
-    }
-
     public class BannerGrabTests
     {
+        [Fact]
+        public async Task GrabBannerAsync_TlsPorts_ReturnEmptyImmediately()
+        {
+            // 443/8443은 평문 HEAD가 통하지 않으므로(HttpProbe/TlsInspector 담당) 연결조차 하지 않고 빈 값을 돌려준다.
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Assert.Equal("", await new TcpPortProber().GrabBannerAsync("127.0.0.1", 443, 2000, CancellationToken.None));
+            Assert.Equal("", await new TcpPortProber().GrabBannerAsync("127.0.0.1", 8443, 2000, CancellationToken.None));
+            Assert.True(sw.ElapsedMilliseconds < 1000, $"{sw.ElapsedMilliseconds}ms");
+        }
+
         [Fact]
         public async Task GrabBannerAsync_ReadsGreetingFromListeningServer()
         {
@@ -120,7 +100,7 @@ namespace NetworkScanner.Tests
             });
             try
             {
-                string banner = await PingTester.GrabBannerAsync("127.0.0.1", port, 1000);
+                string banner = await new TcpPortProber().GrabBannerAsync("127.0.0.1", port, 1000, CancellationToken.None);
                 Assert.Contains("SSH-2.0-OpenSSH_9.0", banner);
             }
             finally

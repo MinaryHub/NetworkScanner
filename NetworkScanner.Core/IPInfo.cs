@@ -41,13 +41,19 @@ namespace NetworkScanner
         // 스캔 시 열린 포트 중 위험(백도어) 포트 목록과 일치하는 것이 있으면 true.
         public bool HasProhibitedPort { get; set; }
 
-        // UI가 상태를 색상/배지로 표시할 때 쓰는 3단계 상태 키. Alive/HasProhibitedPort 조합으로 계산된다.
-        public string StatusKey => !Alive ? "bad" : (HasProhibitedPort || RiskScore >= 40 ? "warn" : "good");
-        public string StatusText => !Alive ? Localization.T("status.down") : (HasProhibitedPort ? Localization.T("status.warn") : Localization.T("status.up"));
+        // 이 점수 이상이면 위험 포트가 없어도 "주의" 상태로 본다(취약점 평가 결과).
+        public const int WarnRiskScore = 40;
+
+        // 살아있고 위험 포트 또는 높은 위험 점수가 있으면 주의. StatusKey/StatusText는 항상 같은 판정을 쓴다.
+        public bool IsWarning => Alive && (HasProhibitedPort || RiskScore >= WarnRiskScore);
+
+        // UI가 상태를 색상/배지로 표시할 때 쓰는 3단계 상태 키. Alive/HasProhibitedPort/RiskScore 조합으로 계산된다.
+        public string StatusKey => !Alive ? "bad" : (IsWarning ? "warn" : "good");
+        public string StatusText => !Alive ? Localization.T("status.down") : (IsWarning ? Localization.T("status.warn") : Localization.T("status.up"));
 
         // 제조사·열린 포트로 추정한 장비 종류(참고용). UI의 "종류" 컬럼에 표시된다.
-        // 종류: 프로브가 확인한 범주 → 모델명 → 제조사/포트 분류 순.
-        public string DeviceType => !string.IsNullOrEmpty(DeviceHint) ? DeviceHint : !string.IsNullOrEmpty(Model) ? Model : DeviceClassifier.Classify(Vendor, Ports);
+        // 종류: 프로브가 확인한 범주 → 제조사/포트 분류 순. 모델명은 별도 열(Model)이므로 여기 쓰지 않는다.
+        public string DeviceType => !string.IsNullOrEmpty(DeviceHint) ? DeviceHint : DeviceClassifier.Classify(Vendor, Ports);
         public string DeviceHint { get; set; } = "";
 
         // Ping 응답의 TTL(0이면 미측정). OsGuess는 TTL로 추정한 OS 계열(참고용).

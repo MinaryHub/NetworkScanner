@@ -14,7 +14,6 @@ namespace NetworkScanner.Discovery.Fingerprint
         public const ushort CommandNegotiate = 0x0000;
         public const ushort CommandSessionSetup = 0x0001;
         public const uint StatusSuccess = 0x00000000;
-        public const uint StatusMoreProcessingRequired = 0xC0000016;
         public const uint FlagServerToRedir = 0x00000001;
 
         public const ushort Dialect202 = 0x0202, Dialect210 = 0x0210, Dialect300 = 0x0300, Dialect302 = 0x0302, Dialect311 = 0x0311;
@@ -169,27 +168,6 @@ namespace NetworkScanner.Discovery.Fingerprint
             return true;
         }
 
-        // 서버 역할(테스트/루프백)용 NEGOTIATE 응답. 보안 버퍼는 비워 둔다(클라이언트가 NTLMSSP를 직접 제안하므로 문제없다).
-        public static byte[] BuildNegotiateResponse(ushort dialect, Guid serverGuid, ulong messageId = 0)
-        {
-            var msg = new byte[HeaderSize + 65];
-            Span<byte> s = msg;
-            WriteHeader(s, CommandNegotiate, StatusSuccess, FlagServerToRedir, 0, 1, messageId, 0);
-            Span<byte> b = s.Slice(HeaderSize);
-            BinaryPrimitives.WriteUInt16LittleEndian(b, 65);
-            BinaryPrimitives.WriteUInt16LittleEndian(b.Slice(2), 0x0001);
-            BinaryPrimitives.WriteUInt16LittleEndian(b.Slice(4), dialect);
-            serverGuid.TryWriteBytes(b.Slice(8, 16));
-            BinaryPrimitives.WriteUInt32LittleEndian(b.Slice(24), 0x00000007);
-            BinaryPrimitives.WriteUInt32LittleEndian(b.Slice(28), 0x00800000);
-            BinaryPrimitives.WriteUInt32LittleEndian(b.Slice(32), 0x00800000);
-            BinaryPrimitives.WriteUInt32LittleEndian(b.Slice(36), 0x00800000);
-            BinaryPrimitives.WriteUInt64LittleEndian(b.Slice(40), (ulong)DateTime.UtcNow.ToFileTimeUtc());
-            BinaryPrimitives.WriteUInt16LittleEndian(b.Slice(56), (ushort)(HeaderSize + 64));
-            BinaryPrimitives.WriteUInt16LittleEndian(b.Slice(58), 0);
-            return Frame(msg);
-        }
-
         // ---------- SESSION_SETUP ----------
 
         public static byte[] BuildSessionSetupRequest(byte[] securityBlob, ulong messageId = 1)
@@ -225,22 +203,6 @@ namespace NetworkScanner.Discovery.Fingerprint
             if (offset < HeaderSize || offset + length > smb.Length) return false;
             securityBlob = smb.Slice(offset, length).ToArray();
             return true;
-        }
-
-        // 서버 역할(테스트/루프백)용 SESSION_SETUP 응답.
-        public static byte[] BuildSessionSetupResponse(uint status, byte[] securityBlob, ulong sessionId, ulong messageId = 1)
-        {
-            const int bodyFixed = 8;
-            var msg = new byte[HeaderSize + bodyFixed + securityBlob.Length];
-            Span<byte> s = msg;
-            WriteHeader(s, CommandSessionSetup, status, FlagServerToRedir, 1, 1, messageId, sessionId);
-            Span<byte> b = s.Slice(HeaderSize);
-            BinaryPrimitives.WriteUInt16LittleEndian(b, 9);
-            BinaryPrimitives.WriteUInt16LittleEndian(b.Slice(2), 0);
-            BinaryPrimitives.WriteUInt16LittleEndian(b.Slice(4), (ushort)(HeaderSize + bodyFixed));
-            BinaryPrimitives.WriteUInt16LittleEndian(b.Slice(6), (ushort)securityBlob.Length);
-            securityBlob.CopyTo(b.Slice(bodyFixed));
-            return Frame(msg);
         }
 
         // ---------- SMB1(CIFS) NEGOTIATE: SMB2를 모르는 구형 서버 판별용 ----------

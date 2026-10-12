@@ -50,6 +50,35 @@ namespace NetworkScanner.Tests
         }
 
         [Fact]
+        public void Profiles_AppliedInSequence_DoNotLeakPreviousValues()
+        {
+            // 같은 옵션 객체에 quick → thorough를 연달아 적용하면 quick이 끈 심층 발견/식별/평가가 다시 켜져야 한다.
+            var options = new ScanOptions();
+            ScanProfiles.Apply(options, ScanProfileKind.Quick);
+            Assert.False(options.DeepDiscovery);
+            Assert.Equal(ScanProfileKind.Quick, options.Profile);
+
+            ScanProfiles.Apply(options, ScanProfileKind.Thorough);
+            Assert.True(options.DeepDiscovery);
+            Assert.True(options.IdentityProbes);
+            Assert.True(options.BannerGrab);
+            Assert.True(options.AssessVulnerabilities);
+            Assert.Equal(ScanProfileKind.Thorough, options.Profile);
+            Assert.Equal("thorough", ScanProfiles.Name(options.Profile));
+            Assert.NotEmpty(options.ExtraPorts);
+
+            // thorough → standard: 타임아웃/추가 포트가 기본값으로 돌아온다.
+            ScanProfiles.Apply(options, ScanProfileKind.Standard);
+            var defaults = new ScanOptions();
+            Assert.Equal(defaults.PingTimeoutMs, options.PingTimeoutMs);
+            Assert.Equal(defaults.PortTimeoutMs, options.PortTimeoutMs);
+            Assert.Equal(defaults.DnsTimeoutMs, options.DnsTimeoutMs);
+            Assert.Empty(options.ExtraPorts);
+            Assert.True(options.DeepDiscovery);
+            Assert.Equal(ScanProfileKind.Standard, options.Profile);
+        }
+
+        [Fact]
         public void ExportImport_RoundTripsWithoutSecrets_AndKeepsLocalOnlyValues()
         {
             var data = new AppSettingsData { SystemName = "site-A", ScanProfile = "thorough", UsageNoticeAccepted = true, IpListColumnWidths = "1,2" };

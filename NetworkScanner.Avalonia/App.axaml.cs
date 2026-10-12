@@ -17,10 +17,9 @@ public partial class App : Application
         // Core의 각 모듈이 내는 오류 콜백을 파일 로거(AppLogger)에 연결한다.
         const string LogSource = "NetworkScanner";
         OUIInfo.OnError = message => AppLogger.LogError(LogSource, message);
-        PingTester.OnError = message => AppLogger.LogError(LogSource, message);
+        NetworkScanner.Network.IcmpPinger.OnError = message => AppLogger.LogError(LogSource, message);
         PortReferenceLoader.OnError = message => AppLogger.LogError(LogSource, message);
         AppSettingsStore.OnError = message => AppLogger.LogError(LogSource, message);
-        AnnotationStore.OnError = message => AppLogger.LogError(LogSource, message);
         WakeOnLan.OnError = message => AppLogger.LogError(LogSource, message);
         NetworkScanner.Secrets.SecretStoreDiagnostics.OnError = message => AppLogger.LogError(LogSource, message);
 

@@ -53,11 +53,15 @@ namespace NetworkScanner.Tests
             Assert.Equal("Windows", info.OsHint);
             Assert.Equal("Windows 10 (10.0.19045)", info.OsVersion);
             Assert.Equal("OptiPlex 7090", info.Model);
-            Assert.Equal("OptiPlex 7090", info.DeviceType); // 범주 사실이 없으면 모델명이 종류 열에 보인다
+            // 범주 사실이 없으면 제조사/포트 분류만 본다(여기서는 둘 다 단서가 없어 빈 칸). 모델명은 종류 열에 쓰지 않는다.
+            Assert.Equal("", info.DeviceType);
+            info.Ports = "9100/";
+            Assert.Equal(Localization.T("dev.printer"), info.DeviceType);
+            info.Ports = "";
 
-            facts.Add(FactFields.DeviceType, "computer", "SSDP", Confidence.High);
+            facts.Add(FactFields.DeviceType, "nas", "SSDP", Confidence.High);
             FactFusion.ApplyTo(facts, info, m => "OUI Vendor");
-            Assert.Equal(Localization.T("dev.pclaptop"), info.DeviceType);
+            Assert.Equal(Localization.T("dev.nas"), info.DeviceType);
             Assert.Equal("OptiPlex 7090", info.Model);
             Assert.Equal("AA-BB-CC-DD-EE-FF", info.Macaddr);
             Assert.Equal("OUI Vendor", info.Vendor); // MAC을 새로 알았으면 OUI 조회가 우선, 그 뒤 SSDP 제조사는 덮지 않음
@@ -100,6 +104,27 @@ namespace NetworkScanner.Tests
                     ["10.9.0.17"] = new[] { new Fact(FactFields.Model, "RT-AX88U", "SSDP", Confidence.High), new Fact(FactFields.Vendor, "ASUSTeK", "SSDP", Confidence.High) },
                     ["mac:AA-AA-AA-AA-AA-05"] = new[] { new Fact(FactFields.SwitchPort, "core-sw / Gi1/0/7", "SNMP-table:10.9.0.1", Confidence.High) },
                 });
+        }
+
+        // 대상 목록을 받는 발견(능동 ARP 흉내): 엔진이 넘긴 대상을 기록하고, 그중 하나를 ARP 응답으로 살린다.
+        private sealed class FakeTargetedDiscovery : ITargetedNetworkDiscovery
+        {
+            public IReadOnlyList<System.Net.IPAddress>? Received;
+            public int UntargetedCalls;
+            public string Name => "ARP-probe";
+            public Task<IReadOnlyDictionary<string, IReadOnlyList<Fact>>> DiscoverAsync(int timeoutMs, CancellationToken ct)
+            {
+                UntargetedCalls++;
+                return Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<Fact>>>(new Dictionary<string, IReadOnlyList<Fact>>());
+            }
+            public Task<IReadOnlyDictionary<string, IReadOnlyList<Fact>>> DiscoverAsync(IReadOnlyList<System.Net.IPAddress> targets, int timeoutMs, CancellationToken ct)
+            {
+                Received = targets;
+                return Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<Fact>>>(new Dictionary<string, IReadOnlyList<Fact>>
+                {
+                    ["10.9.0.19"] = new[] { new Fact(FactFields.Mac, "AA-AA-AA-AA-AA-19", "ARP-probe", Confidence.High) },
+                });
+            }
         }
 
         private sealed class TestPinger : NetworkScanner.Network.IPinger
@@ -145,6 +170,40 @@ namespace NetworkScanner.Tests
             Assert.Equal("MCAST", router.RountTime);
             Assert.Equal("RT-AX88U", router.Model);
             Assert.Equal("ASUSTeK", router.Vendor);
+        }
+
+        [Fact]
+        public async Task Engine_PassesScanTargets_ToTargetedDiscovery()
+        {
+            var config = new FakeScanConfigProvider();
+            config.ScanRanges.AddItem(new ScanRangeInfo { Index = 1, StartIP = "10.9.0.1", EndIP = "10.9.0.20", Description = "" });
+            var arpProbe = new FakeTargetedDiscovery();
+            var services = new ScanServices
+            {
+                Pinger = new TestPinger(),
+                Ports = ScanServices.CreateOffline().Ports,
+                Arp = new TestArp(),
+                Dns = ScanServices.CreateOffline().Dns,
+                Ttl = new NetworkScanner.Network.NullTtlProber(),
+                IdentityDisabled = true,
+                NetworkDiscoveries = new INetworkDiscovery[] { arpProbe },
+            };
+            var engine = new ScanEngine(new IPInfoList(), new OUIInfo(), config, services, new ScanOptions { PingRetries = 0, ArpLiveness = false });
+
+            await engine.DoScanAllRange(false, "sys", CancellationToken.None);
+
+            // 대상이 있는 경로로만 호출되고, 이번 스캔의 대역 전체(20개)가 그대로 전달된다.
+            Assert.Equal(0, arpProbe.UntargetedCalls);
+            Assert.NotNull(arpProbe.Received);
+            Assert.Equal(20, arpProbe.Received!.Count);
+            Assert.Equal("10.9.0.1", arpProbe.Received[0].ToString());
+            Assert.Equal("10.9.0.20", arpProbe.Received[19].ToString());
+
+            // ARP 응답으로만 발견된 호스트는 살아있는 것으로 올라온다(MAC 포함).
+            IPInfo viaArp = engine.Items.GetItem("10.9.0.19")!;
+            Assert.True(viaArp.Alive);
+            Assert.Equal("MCAST", viaArp.RountTime);
+            Assert.Equal("AA-AA-AA-AA-AA-19", viaArp.Macaddr);
         }
     }
 }

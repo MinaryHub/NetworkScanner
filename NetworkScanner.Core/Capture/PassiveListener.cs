@@ -47,7 +47,6 @@ namespace NetworkScanner.Capture
         public string InterfaceName { get; private set; } = "";
         public long PacketsSeen => Interlocked.Read(ref _packets);
         public long ObservationsRaised => Interlocked.Read(ref _observations);
-        public long DecodeErrors => Interlocked.Read(ref _decodeErrors);
 
         // interfaceName: pcap 장치 이름(en0, \Device\NPF_{…}) 또는 FriendlyName/설명. null이면 첫 번째 활성 IPv4 인터페이스.
         public PassiveListener(string? interfaceName = null)
@@ -526,14 +525,14 @@ namespace NetworkScanner.Capture
                 if (qd < 1) return null;
 
                 int pos = 12;
-                if (!TryReadNbName(payload, ref pos, out string name, out byte suffix)) return null;
+                if (!NetBiosCodec.TryReadEncodedName(payload, ref pos, out string name, out byte suffix)) return null;
                 pos += 4; // qtype, qclass
                 bool group = false;
                 if (ar >= 1 && pos + 2 <= payload.Length)
                 {
                     // RR 이름(포인터 2바이트 또는 전체) + type(2) class(2) ttl(4) rdlen(2) + NB_FLAGS(2)
                     if ((payload[pos] & 0xC0) == 0xC0) pos += 2;
-                    else if (!TryReadNbName(payload, ref pos, out _, out _)) return null;
+                    else if (!NetBiosCodec.TryReadEncodedName(payload, ref pos, out _, out _)) return null;
                     pos += 10;
                     if (pos + 2 <= payload.Length) group = (payload[pos] & 0x80) != 0;
                 }
@@ -555,27 +554,6 @@ namespace NetworkScanner.Capture
             {
                 return null;
             }
-        }
-
-        // 1단계 인코딩된 NetBIOS 이름(32자) → 15자 이름 + 접미(16번째 바이트).
-        private static bool TryReadNbName(byte[] data, ref int pos, out string name, out byte suffix)
-        {
-            name = ""; suffix = 0;
-            if (pos >= data.Length || data[pos] != 32 || pos + 1 + 32 > data.Length) return false;
-            var raw = new byte[16];
-            for (int i = 0; i < 16; i++)
-            {
-                int hi = data[pos + 1 + i * 2] - 'A', lo = data[pos + 2 + i * 2] - 'A';
-                if (hi < 0 || hi > 15 || lo < 0 || lo > 15) return false;
-                raw[i] = (byte)((hi << 4) | lo);
-            }
-            pos += 1 + 32;
-            // 스코프 라벨(보통 0 한 바이트) 건너뛰기
-            while (pos < data.Length && data[pos] != 0) pos += 1 + data[pos];
-            pos++;
-            suffix = raw[15];
-            name = Encoding.ASCII.GetString(raw, 0, 15).TrimEnd(' ', '\0');
-            return true;
         }
 
         private static HostObservation DecodeTcpSynAck(IPv4Packet ip, TcpPacket tcp, string mac, string srcIp, DateTimeOffset at)

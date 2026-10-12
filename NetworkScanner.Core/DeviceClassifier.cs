@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 
 namespace NetworkScanner
@@ -54,7 +53,7 @@ namespace NetworkScanner
             }
 
             // 제조사로 못 맞추면 열린 포트로 대략 추정한다.
-            HashSet<int> ports = ParsePorts(openPorts);
+            var ports = new HashSet<int>(Network.ProbeExtensions.ParsePorts(openPorts));
             if (ports.Contains(9100) || ports.Contains(515) || ports.Contains(631)) return "dev.printer";
             if (ports.Contains(554)) return "dev.cctv";
             if (ports.Contains(3389)) return "dev.windowspc";
@@ -63,16 +62,6 @@ namespace NetworkScanner
             if (ports.Contains(80) || ports.Contains(443)) return "dev.web";
 
             return null;
-        }
-
-        private static HashSet<int> ParsePorts(string? field)
-        {
-            var set = new HashSet<int>();
-            if (string.IsNullOrEmpty(field)) return set;
-            foreach (string token in field.Split('/', StringSplitOptions.RemoveEmptyEntries))
-                if (int.TryParse(token, out int port))
-                    set.Add(port);
-            return set;
         }
     }
 }

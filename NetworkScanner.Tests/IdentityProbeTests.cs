@@ -383,7 +383,8 @@ namespace NetworkScanner.Tests
                 new NetBiosProbe(), new MdnsProbe(), new SnmpProbe(),
             });
             Assert.Null(await composite.ProbeAsync(IPAddress.Loopback, 500, cts.Token));
-            Assert.Equal(CompositeIdentityProbe.DefaultPriority, CompositeIdentityProbe.CreateDefault().Priority);
+            Assert.Equal(CompositeIdentityProbe.DefaultPriority, CompositeIdentityProbe.Create(true, true, true)!.Priority);
+            Assert.Null(CompositeIdentityProbe.Create(false, false, false));
         }
 
         // ---------- 루프백 소켓 경로 ----------

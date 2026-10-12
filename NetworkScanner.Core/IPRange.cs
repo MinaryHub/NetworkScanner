@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Net;
-using System.Runtime.CompilerServices;
 
 namespace NetworkScanner
 {
@@ -39,27 +37,10 @@ namespace NetworkScanner
             if (item != null) Remove(item);
         }
 
-        public bool IsExist(int index)
-        {
-            if (this.Where(x => x.Index == index).FirstOrDefault() == null)
-                return false;
-            else
-                return true;
-        }
-
         // 시작/종료 IP가 둘 다 같은 대역이 이미 있는지 확인한다(둘 중 하나만 같은 건 다른 대역이다).
         public bool IsExist(string startIp, string endIp)
         {
             return this.Any(x => x.StartIP == startIp && x.EndIP == endIp);
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        public void NotifyPropertyChanged([CallerMemberName] string? name = null)
-        {
-            if (!string.IsNullOrEmpty(name))
-            {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-            }
         }
     }
 

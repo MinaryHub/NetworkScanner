@@ -94,6 +94,28 @@ namespace NetworkScanner.Discovery
             }
         }
 
+        // 1급 인코딩된 NetBIOS 이름(길이 32 + 'A'..'P' 32자 + 스코프 라벨) → 15자 이름 + 접미(16번째 바이트).
+        // pos는 이름 뒤(스코프 종료 0 바이트 다음)로 옮긴다. 형식이 아니면 false이고 pos는 그대로.
+        public static bool TryReadEncodedName(byte[] data, ref int pos, out string name, out byte suffix)
+        {
+            name = ""; suffix = 0;
+            if (pos >= data.Length || data[pos] != 32 || pos + 1 + 32 > data.Length) return false;
+            var raw = new byte[16];
+            for (int i = 0; i < 16; i++)
+            {
+                int hi = data[pos + 1 + i * 2] - 'A', lo = data[pos + 2 + i * 2] - 'A';
+                if (hi < 0 || hi > 15 || lo < 0 || lo > 15) return false;
+                raw[i] = (byte)((hi << 4) | lo);
+            }
+            int p = pos + 1 + 32;
+            // 스코프 라벨(보통 0 한 바이트) 건너뛰기
+            while (p < data.Length && data[p] != 0) p += 1 + data[p];
+            pos = p + 1;
+            suffix = raw[15];
+            name = Encoding.ASCII.GetString(raw, 0, 15).TrimEnd(' ', '\0');
+            return true;
+        }
+
         private static bool HasControlChars(string s)
         {
             foreach (char c in s) if (c < 0x20 || c == 0x7F) return true;

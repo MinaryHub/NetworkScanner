@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 
 namespace NetworkScanner
@@ -21,7 +20,7 @@ namespace NetworkScanner
 
             string v = (vendor ?? "").ToLowerInvariant();
             string n = (hostName ?? "").ToLowerInvariant();
-            HashSet<int> ports = ParsePorts(openPorts);
+            var ports = new HashSet<int>(Network.ProbeExtensions.ParsePorts(openPorts));
 
             // 호스트명에 드러나는 기기(가장 구체적)
             if (n.Contains("iphone")) return "iOS";
@@ -58,15 +57,6 @@ namespace NetworkScanner
             // 마지막으로 TTL
             if (ttl > 0 && ttl <= 64 && (ports.Contains(22) || ports.Contains(111) || ports.Contains(2049))) return "Linux/Unix";
             return FromTtl(ttl);
-        }
-
-        private static HashSet<int> ParsePorts(string? field)
-        {
-            var set = new HashSet<int>();
-            if (string.IsNullOrEmpty(field)) return set;
-            foreach (string token in field.Split('/', StringSplitOptions.RemoveEmptyEntries))
-                if (int.TryParse(token, out int port)) set.Add(port);
-            return set;
         }
     }
 }

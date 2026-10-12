@@ -42,6 +42,69 @@ namespace NetworkScanner.History
             Exec("PRAGMA foreign_keys=ON;");
 
             Migrate();
+            ImportLegacyAnnotations(Path.Combine(dir ?? "", LegacyAnnotationsFileName));
+        }
+
+        // 구버전이 IP별 이름/비고를 두던 파일(ip \t name \t description). 이제는 hosts.note/last_name에 산다.
+        public const string LegacyAnnotationsFileName = "annotations.ini";
+
+        // annotations.ini가 DB 옆에 남아 있으면 hosts로 1회 옮기고 파일 이름을 *.migrated로 바꾼다.
+        // 비고는 hosts.note가 비어 있을 때만, 이름은 last_name이 비어 있을 때만 채운다(사용자가 그 사이 입력한 값 보호). 실패해도 저장소는 연다.
+        private void ImportLegacyAnnotations(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return;
+                var entries = ParseLegacyAnnotations(File.ReadAllText(path, System.Text.Encoding.UTF8));
+                lock (_gate)
+                {
+                    using var tx = _conn.BeginTransaction();
+                    using var cmd = _conn.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
+INSERT INTO hosts(ip, first_seen, last_seen, last_name, note)
+VALUES(@ip, @now, @now, @name, @note)
+ON CONFLICT(ip) DO UPDATE SET
+    note      = CASE WHEN hosts.note = '' THEN excluded.note ELSE hosts.note END,
+    last_name = CASE WHEN hosts.last_name = '' THEN excluded.last_name ELSE hosts.last_name END;";
+                    var pIp = cmd.Parameters.Add("@ip", SqliteType.Text);
+                    var pName = cmd.Parameters.Add("@name", SqliteType.Text);
+                    var pNote = cmd.Parameters.Add("@note", SqliteType.Text);
+                    cmd.Parameters.AddWithValue("@now", Fmt(DateTimeOffset.UtcNow));
+                    foreach (var (ip, name, note) in entries)
+                    {
+                        pIp.Value = ip;
+                        pName.Value = name;
+                        pNote.Value = note;
+                        cmd.ExecuteNonQuery();
+                    }
+                    tx.Commit();
+                }
+                File.Move(path, path + ".migrated", overwrite: true);
+                AppLogger.LogInfo("History", $"annotations.ini migrated: {entries.Count} host(s)");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogWarn("History", "annotations.ini migration failed: " + ex.Message);
+            }
+        }
+
+        // 탭 구분 "ip \t name \t description". 잘못된 줄은 건너뛰고, 같은 IP는 마지막 줄이 이긴다. 둘 다 빈 항목은 버린다.
+        internal static List<(string Ip, string Name, string Description)> ParseLegacyAnnotations(string text)
+        {
+            var map = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
+            foreach (string line in text.Split('\n'))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                string[] token = line.TrimEnd('\r').Split('\t');
+                if (token.Length < 3 || !IPAddress.TryParse(token[0].Trim(), out _)) continue;
+                string name = token[1].Trim(), desc = token[2].Trim();
+                if (name.Length == 0 && desc.Length == 0) continue;
+                map[token[0].Trim()] = (name, desc);
+            }
+            var list = new List<(string, string, string)>(map.Count);
+            foreach (var kv in map) list.Add((kv.Key, kv.Value.Item1, kv.Value.Item2));
+            return list;
         }
 
         // ---- 스키마 ----
@@ -530,6 +593,49 @@ ON CONFLICT(ip) DO UPDATE SET
                 cmd.Parameters.AddWithValue("@tags", (object?)tags ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@note", (object?)note ?? DBNull.Value);
                 return cmd.ExecuteNonQuery() > 0;
+            }
+        }
+
+        // 인벤토리의 비어 있지 않은 비고(IP → note). 엔진이 스캔/CSV 불러오기 때 Description을 채우는 데 쓴다.
+        public IReadOnlyDictionary<string, string> GetHostNotes()
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                var map = new Dictionary<string, string>(StringComparer.Ordinal);
+                using var cmd = _conn.CreateCommand();
+                cmd.CommandText = "SELECT ip, note FROM hosts WHERE note <> '';";
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) map[r.GetString(0)] = r.GetString(1);
+                return map;
+            }
+        }
+
+        // 여러 호스트의 비고를 한 트랜잭션으로 저장한다(행이 없으면 만든다). 반환값은 처리한 호스트 수.
+        public int SetHostNotes(IEnumerable<KeyValuePair<string, string>> notes)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                int n = 0;
+                using var tx = _conn.BeginTransaction();
+                using var cmd = _conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = @"
+INSERT INTO hosts(ip, first_seen, last_seen, note) VALUES(@ip, @now, @now, @note)
+ON CONFLICT(ip) DO UPDATE SET note = excluded.note;";
+                var pIp = cmd.Parameters.Add("@ip", SqliteType.Text);
+                var pNote = cmd.Parameters.Add("@note", SqliteType.Text);
+                cmd.Parameters.AddWithValue("@now", Fmt(DateTimeOffset.UtcNow));
+                foreach (var kv in notes)
+                {
+                    if (string.IsNullOrWhiteSpace(kv.Key)) continue;
+                    pIp.Value = kv.Key.Trim();
+                    pNote.Value = kv.Value ?? "";
+                    n += cmd.ExecuteNonQuery();
+                }
+                tx.Commit();
+                return n;
             }
         }
 

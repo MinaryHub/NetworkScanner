@@ -663,11 +663,13 @@ namespace NetworkScanner.Tests
             Assert.NotNull(result);
             if (!ActiveArpProber.IsSupported) Assert.Empty(result);
 
-            var d = new ActiveArpDiscovery(targets);
+            var d = new ActiveArpDiscovery();
             Assert.Equal("ARP-probe", d.Name);
-            var facts = await d.DiscoverAsync(50, CancellationToken.None);
+            var facts = await d.DiscoverAsync(targets, 50, CancellationToken.None);
             if (!ActiveArpProber.IsSupported) Assert.Empty(facts);
-            Assert.Empty(await new ActiveArpDiscovery(Array.Empty<IPAddress>()).DiscoverAsync(50, CancellationToken.None));
+            // 대상 없이(INetworkDiscovery 경로) 호출되면 항상 비어 있다.
+            Assert.Empty(await d.DiscoverAsync(50, CancellationToken.None));
+            Assert.Empty(await d.DiscoverAsync(Array.Empty<IPAddress>(), 50, CancellationToken.None));
         }
 
         [Fact]
