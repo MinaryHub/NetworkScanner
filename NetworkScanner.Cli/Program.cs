@@ -426,7 +426,10 @@ static int RunSettings(CliOptions o)
 // netscan update [check|apply] — 현재 RID용 압축본을 받아 SHA256SUMS.txt로 검증한 뒤 설치 폴더에 적용한다.
 static async Task<int> RunUpdateAsync(CliOptions o)
 {
-    var updater = new NetworkScanner.Updates.HeadlessUpdater();
+    // 설정의 Update.Repository(포크/사내 미러)가 있으면 그 저장소의 릴리스를 본다.
+    string? repo = null;
+    try { repo = AppSettingsStore.LoadSettings().Update.Repository; } catch { }
+    var updater = new NetworkScanner.Updates.HeadlessUpdater(new NetworkScanner.Updates.GitHubReleases(repo));
     var current = NetworkScanner.Updates.GitHubReleases.CurrentVersion();
     try
     {

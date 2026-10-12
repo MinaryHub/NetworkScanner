@@ -12,7 +12,8 @@ namespace NetworkScanner.Updates
 {
     public sealed record ReleaseAsset(string Name, string DownloadUrl, long Size);
 
-    public sealed record ReleaseInfo(Version Version, string Tag, bool Prerelease, DateTimeOffset PublishedAt, IReadOnlyList<ReleaseAsset> Assets)
+    // HtmlUrl: 브라우저용 릴리스 페이지(설치본이 아닌 실행에서 "다운로드 페이지 열기"에 쓴다).
+    public sealed record ReleaseInfo(Version Version, string Tag, bool Prerelease, DateTimeOffset PublishedAt, IReadOnlyList<ReleaseAsset> Assets, string HtmlUrl = "")
     {
         public ReleaseAsset? FindAsset(Func<string, bool> predicate) => Assets.FirstOrDefault(a => predicate(a.Name));
     }
@@ -20,7 +21,10 @@ namespace NetworkScanner.Updates
     // GitHub Releases API에서 최신 릴리스를 읽는다(인증 없음, 분당 60회 제한 → 호출은 몇 시간에 한 번).
     public sealed class GitHubReleases
     {
-        public const string DefaultRepo = "knoxxr/NetworkScanner";
+        // 저장소가 이전 이름(knoxxr/…)에서 옮겨졌다. 설정(Update.Repository)으로 포크/사내 미러를 지정할 수 있다.
+        public const string DefaultRepo = "MinaryHub/NetworkScanner";
+
+        public string Repo => _repo;
 
         private readonly HttpClient _http;
         private readonly string _repo;
@@ -73,7 +77,8 @@ namespace NetworkScanner.Updates
                 DateTimeOffset published = r.TryGetProperty("published_at", out var pa) && pa.ValueKind == JsonValueKind.String
                     && DateTimeOffset.TryParse(pa.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt) ? dt : DateTimeOffset.MinValue;
 
-                var info = new ReleaseInfo(version, tag, pre, published, assets);
+                string html = r.TryGetProperty("html_url", out var hu) && hu.ValueKind == JsonValueKind.String ? hu.GetString() ?? "" : "";
+                var info = new ReleaseInfo(version, tag, pre, published, assets, html);
                 if (best == null || info.Version > best.Version) best = info;
             }
             return best;

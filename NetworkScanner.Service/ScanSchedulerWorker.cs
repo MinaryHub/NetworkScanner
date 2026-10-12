@@ -140,7 +140,7 @@ public sealed class ScanSchedulerWorker : BackgroundService
     {
         try
         {
-            var updater = new HeadlessUpdater();
+            var updater = new HeadlessUpdater(new GitHubReleases(update.Repository));
             HeadlessUpdate? found = await updater.CheckAsync(GitHubReleases.CurrentVersion(), update.IncludePrerelease, ct);
             if (found == null) return false;
             _log.LogInformation("update available: {Version} ({Asset})", found.Version, found.Archive.Name);

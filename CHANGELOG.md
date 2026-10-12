@@ -3,6 +3,7 @@
 ## Unreleased (2.1.0) — commercial feature set
 
 ### Changed (clean-up round)
+- Updates: the release feed now points at the moved repository (`MinaryHub/NetworkScanner`); portable/development builds check for new versions too and open the release page; `Update.Repository` overrides the source for all three updaters.
 - Settings: the "Device identification" and "Deep discovery" groups are one card (Names / Fingerprints / Network rows, one SNMP community); vulnerability assessment sits next to the port settings; the duplicate profile selector, the duplicate History backup button and the fixed 90-day prune are gone (prune uses the retention setting); hours are labelled 00–23; a hint shows when discovery changes need a restart.
 - IP list: search covers model, OS, OS version, type, service and switch port; port checks sit in one "Check ports" submenu; Approve/Unapprove in the context menu; the "Type" column shows the probed category only (the model has its own column); the status legend is gone; column widths are saved by column id, so adding columns no longer scrambles them.
 - Host details show model, MAC, vendor, IPv6, open ports and service, with localized severity/confidence labels. Inventory shows model, OS and note.

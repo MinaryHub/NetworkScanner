@@ -240,10 +240,10 @@ public partial class MainWindow : Window, IScanConfigProvider
 
     private void InitUpdates(AppSettingsData settings)
     {
-        _updateService.SetPrerelease(settings.Update.IncludePrerelease);
+        _updateService.Configure(settings.Update.IncludePrerelease, settings.Update.Repository);
         _updateService.StateChanged += (state, progress) => Dispatcher.UIThread.Post(() => RenderUpdateState(state, progress));
         _settingsView.UpdateCheckRequested += () => _ = CheckForUpdatesAsync(manual: true);
-        _settingsView.SettingsSaved += data => _updateService.SetPrerelease(data.Update.IncludePrerelease);
+        _settingsView.SettingsSaved += data => _updateService.Configure(data.Update.IncludePrerelease, data.Update.Repository);
         if (settings.Update.AutoCheck) _ = CheckForUpdatesAsync(manual: false);
     }
 
@@ -253,13 +253,12 @@ public partial class MainWindow : Window, IScanConfigProvider
         try
         {
             string? newVersion = await _updateService.CheckAsync();
-            if (manual && _updateService.State == UpdateState.NotInstalled)
-                _settingsView.ShowUpdateStatus(Localization.T("update.notinstalled"));
-            else if (manual && newVersion == null)
+            if (manual && newVersion == null)
                 _settingsView.ShowUpdateStatus(Localization.T("update.uptodate"));
             if (newVersion == null) return;
 
-            if (settings.Update.AutoDownload)
+            // 포터블/개발 실행은 내려받지 않고 버튼으로 릴리스 페이지를 열어 준다(자동으로 브라우저를 띄우지 않는다).
+            if (settings.Update.AutoDownload && _updateService.IsInstalled)
                 await _updateService.DownloadAsync(settings.Update.AutoApply);
         }
         catch (Exception ex)
@@ -279,7 +278,7 @@ public partial class MainWindow : Window, IScanConfigProvider
         {
             case UpdateState.Available:
                 TbUpdate.Text = $"{Localization.T("update.button")} v{v}";
-                ToolTip.SetTip(BtnUpdate, string.Format(Localization.T("update.available"), v));
+                ToolTip.SetTip(BtnUpdate, string.Format(Localization.T(_updateService.IsInstalled ? "update.available" : "update.openpage"), v));
                 BtnUpdate.IsVisible = true;
                 BtnUpdate.IsEnabled = true;
                 break;
@@ -306,7 +305,8 @@ public partial class MainWindow : Window, IScanConfigProvider
         _settingsView.ShowUpdateStatus(state switch
         {
             UpdateState.Checking => Localization.T("update.checking"),
-            UpdateState.Available => string.Format(Localization.T("update.available"), v),
+            UpdateState.Available => string.Format(Localization.T(_updateService.IsInstalled ? "update.available" : "update.openpage"), v)
+                                     + (_updateService.IsInstalled ? "" : " " + Localization.T("update.notinstalled")),
             UpdateState.Downloading => $"{Localization.T("update.downloading")} {progress}%",
             UpdateState.Ready => string.Format(Localization.T(autoApply ? "update.onexit" : "update.ready"), v),
             UpdateState.UpToDate => Localization.T("update.uptodate"),
@@ -329,6 +329,14 @@ public partial class MainWindow : Window, IScanConfigProvider
                 case UpdateState.Failed:
                     BtnUpdate.IsEnabled = false;
                     if (_updateService.AvailableVersion == null) await _updateService.CheckAsync();
+                    if (!_updateService.IsInstalled)
+                    {
+                        // 설치본이 아니면 릴리스 페이지를 브라우저로 연다.
+                        if (_updateService.ExternalReleaseUrl != null)
+                            await Launcher.LaunchUriAsync(new Uri(_updateService.ExternalReleaseUrl));
+                        BtnUpdate.IsEnabled = true;
+                        break;
+                    }
                     // 수동 다운로드도 설정의 '종료 시 설치'를 따른다(종료 시 따로 예약하는 코드는 없다).
                     if (_updateService.AvailableVersion != null)
                         await _updateService.DownloadAsync(autoApplyOnExit: _settingsView.GetCurrentSettings().Update.AutoApply);

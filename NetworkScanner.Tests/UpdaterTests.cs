@@ -30,7 +30,7 @@ namespace NetworkScanner.Tests
           { "tag_name": "v2.3.0", "draft": true, "prerelease": false, "assets": [] },
           { "tag_name": "v2.2.0-beta.1", "draft": false, "prerelease": true, "published_at": "2026-10-10T00:00:00Z",
             "assets": [ { "name": "netscan-2.2.0-osx-arm64.tar.gz", "browser_download_url": "https://x/beta.tar.gz", "size": 10 } ] },
-          { "tag_name": "v2.1.0", "draft": false, "prerelease": false, "published_at": "2026-10-01T00:00:00Z",
+          { "tag_name": "v2.1.0", "draft": false, "prerelease": false, "published_at": "2026-10-01T00:00:00Z", "html_url": "https://github.com/x/y/releases/tag/v2.1.0",
             "assets": [ { "name": "netscan-2.1.0-osx-arm64.tar.gz", "browser_download_url": "https://x/a.tar.gz", "size": 10 },
                         { "name": "netscan-2.1.0-win-x64.zip", "browser_download_url": "https://x/b.zip", "size": 10 },
                         { "name": "SHA256SUMS.txt", "browser_download_url": "https://x/sums", "size": 1 } ] },
@@ -47,6 +47,9 @@ namespace NetworkScanner.Tests
             Assert.Equal(new Version(2, 1, 0), stable!.Version);
             Assert.Equal(3, stable.Assets.Count);
             Assert.NotNull(stable.FindAsset(n => n == "SHA256SUMS.txt"));
+            Assert.Equal("https://github.com/x/y/releases/tag/v2.1.0", stable.HtmlUrl);
+            Assert.Equal("MinaryHub/NetworkScanner", GitHubReleases.DefaultRepo);
+            Assert.Equal("acme/mirror", new GitHubReleases("acme/mirror", new System.Net.Http.HttpClient()).Repo);
 
             ReleaseInfo? beta = GitHubReleases.ParseLatest(doc.RootElement, includePrerelease: true);
             Assert.Equal(new Version(2, 2, 0), beta!.Version);

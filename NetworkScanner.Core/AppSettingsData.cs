@@ -135,6 +135,8 @@ namespace NetworkScanner
         public bool AutoApply { get; set; }                    // GUI: 앱 종료 시 자동 설치 / 서비스: 즉시 설치 후 재시작
         public bool IncludePrerelease { get; set; }            // beta 채널(사전 릴리스) 포함
         public int CheckIntervalHours { get; set; } = 6;
+        // 릴리스를 읽을 GitHub 저장소("owner/name"). 비우면 기본 저장소. 포크나 사내 미러용.
+        public string Repository { get; set; } = "";
     }
 
     public sealed class AssetPolicySettings
