@@ -18,6 +18,8 @@ if (problem != null)
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton<TokenRegistry>();
 builder.Services.AddSingleton<CollectorStore>();
+// 대시보드 로그인 실패 한도: IP당 15분에 10회.
+builder.Services.AddSingleton(new LoginRateLimiter(maxFailures: 10, window: TimeSpan.FromMinutes(15)));
 builder.WebHost.ConfigureKestrel(k =>
 {
     k.Limits.MaxRequestBodySize = options.MaxUploadBytes + 64 * 1024;
@@ -33,6 +35,7 @@ builder.Services.Configure<FormOptions>(f =>
 WebApplication app = builder.Build();
 var store = app.Services.GetRequiredService<CollectorStore>();
 var tokens = app.Services.GetRequiredService<TokenRegistry>();
+var loginLimiter = app.Services.GetRequiredService<LoginRateLimiter>();
 var contentTypes = new FileExtensionContentTypeProvider();
 string[] allowedExt = { ".csv", ".html", ".pdf", ".json" };
 
@@ -94,6 +97,9 @@ async Task<IResult> ReceiveUpload(HttpRequest request)
             app.Logger.LogWarning("csv parse failed for {File}: {Message}", final, ex.Message);
         }
     }
+    // 사이트별 보관 한도(ScansPerSite): 오래된 스캔/업로드 행과 파일을 함께 정리한다.
+    int pruned = store.PruneSite(who.Site);
+    if (pruned > 0) app.Logger.LogInformation("retention: removed {Count} old upload(s) for {Site}", pruned, who.Site);
     app.Logger.LogInformation("upload {Id} from {Site}: {File} ({Bytes} bytes, {Kind})", uploadId, who.Site, final, file.Length, kind);
     return Results.Created($"/api/uploads/{uploadId}", new { id = uploadId, site = who.Site, kind, bytes = file.Length });
 }
@@ -130,7 +136,7 @@ app.MapGet("/api/sites/{site}/scans/{id:long}/hosts", (HttpRequest req, string s
 
 IResult Download(HttpRequest req, long id, bool allowCookie)
 {
-    Principal? who = tokens.Resolve(req, allowCookie, allowQuery: allowCookie);
+    Principal? who = tokens.Resolve(req, allowCookie, allowQuery: false);
     if (who == null) return Results.Unauthorized();
     UploadRow? row = store.GetUpload(id);
     if (row == null) return Results.NotFound();
@@ -144,13 +150,24 @@ IResult Download(HttpRequest req, long id, bool allowCookie)
 app.MapGet("/api/uploads/{id:long}", (HttpRequest req, long id) => Download(req, id, allowCookie: false));
 app.MapGet("/reports/{id:long}", (HttpRequest req, long id) => Download(req, id, allowCookie: true));
 
-// ---- 대시보드(쿠키 또는 ?token= 으로 로그인) ----
+// ---- 대시보드(로그인 폼 → 쿠키; URL의 ?token= 은 받지 않는다) ----
 app.MapGet("/login", () => Results.Content(Dashboard.Login(null), "text/html; charset=utf-8"));
 app.MapPost("/login", async (HttpRequest req, HttpResponse res) =>
 {
+    string client = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    DateTime now = DateTime.UtcNow;
+    if (loginLimiter.IsBlocked(client, now))
+        return Results.Content(Dashboard.Login("Too many failed sign-in attempts. Try again later."), "text/html; charset=utf-8", null, StatusCodes.Status429TooManyRequests);
+
     IFormCollection form = await req.ReadFormAsync();
     string? token = form["token"].FirstOrDefault();
-    if (tokens.Match(token) == null) return Results.Content(Dashboard.Login("Invalid token."), "text/html; charset=utf-8", null, StatusCodes.Status401Unauthorized);
+    if (tokens.Match(token) == null)
+    {
+        int left = loginLimiter.RecordFailure(client, now);
+        app.Logger.LogWarning("dashboard sign-in failed from {Client} ({Left} attempts left)", client, left);
+        return Results.Content(Dashboard.Login("Invalid token."), "text/html; charset=utf-8", null, StatusCodes.Status401Unauthorized);
+    }
+    loginLimiter.Reset(client);
     res.Cookies.Append(TokenRegistry.CookieName, token!, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Strict, Secure = req.IsHttps, MaxAge = TimeSpan.FromDays(30) });
     return Results.Redirect("/");
 }).DisableAntiforgery();
@@ -160,19 +177,17 @@ app.MapPost("/logout", (HttpResponse res) =>
     return Results.Redirect("/login");
 }).DisableAntiforgery();
 
-app.MapGet("/", (HttpRequest req, HttpResponse res) =>
+app.MapGet("/", (HttpRequest req) =>
 {
-    Principal? who = tokens.Resolve(req, allowCookie: true, allowQuery: true);
+    Principal? who = tokens.Resolve(req, allowCookie: true, allowQuery: false);
     if (who == null) return Results.Redirect("/login");
-    if (req.Query.ContainsKey("token"))
-        res.Cookies.Append(TokenRegistry.CookieName, req.Query["token"]!, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Strict, Secure = req.IsHttps, MaxAge = TimeSpan.FromDays(30) });
     var sites = store.ListSites(tokens.Sites).Where(s => who.CanView(s.Site)).ToList();
     return Results.Content(Dashboard.Index(sites, who), "text/html; charset=utf-8");
 });
 
 app.MapGet("/sites/{site}", (HttpRequest req, string site) =>
 {
-    Principal? who = tokens.Resolve(req, allowCookie: true, allowQuery: true);
+    Principal? who = tokens.Resolve(req, allowCookie: true, allowQuery: false);
     if (who == null) return Results.Redirect("/login");
     if (!who.CanView(site)) return Results.Content(Dashboard.Forbidden(site, who), "text/html; charset=utf-8", null, StatusCodes.Status403Forbidden);
     var scans = store.ListScans(site, 50);

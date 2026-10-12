@@ -9,7 +9,6 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <RollForward>LatestMajor</RollForward>
     <Version>2.1.0</Version>
-    <UserSecretsId>NetworkScanner.Collector</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

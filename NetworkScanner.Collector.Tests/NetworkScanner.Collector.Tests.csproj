@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NetworkScanner.Collector\NetworkScanner.Collector.csproj" />
+    <!-- 스캐너가 실제로 만드는 CSV(ScanEngine.BuildCsv)로 파서를 검증한다. -->
+    <ProjectReference Include="..\NetworkScanner.Core\NetworkScanner.Core.csproj" />
   </ItemGroup>
 
 </Project>

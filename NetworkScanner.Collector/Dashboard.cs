@@ -70,7 +70,7 @@ public static class Dashboard
                 sb.Append("<td>").Append(scan == null ? Dash : H(scan.SystemName)).Append("</td>");
                 sb.Append(Num(scan?.Total)).Append(Num(scan?.Alive, "up")).Append(Num(scan?.Risky, "risk")).Append(Num(scan?.HighRisk, "risk"));
                 if (s.LatestReportId is long rid)
-                    sb.Append("<td><a href=\"/api/uploads/").Append(rid.ToString(CultureInfo.InvariantCulture)).Append("\">")
+                    sb.Append("<td><a href=\"/reports/").Append(rid.ToString(CultureInfo.InvariantCulture)).Append("\">")
                       .Append(H(s.LatestReportKind?.ToUpperInvariant())).Append("</a></td>");
                 else
                     sb.Append("<td>").Append(Dash).Append("</td>");
@@ -87,7 +87,7 @@ public static class Dashboard
         sb.Append("<div class=\"crumbs\"><a href=\"/\">Sites</a> / ").Append(H(site)).Append("</div>");
         sb.Append("<h1>").Append(H(site)).Append("</h1>");
         if (report is (long rid, string kind))
-            sb.Append("<p>Latest report: <a href=\"/api/uploads/").Append(rid.ToString(CultureInfo.InvariantCulture)).Append("\">")
+            sb.Append("<p>Latest report: <a href=\"/reports/").Append(rid.ToString(CultureInfo.InvariantCulture)).Append("\">")
               .Append(H(kind.ToUpperInvariant())).Append("</a></p>");
 
         sb.Append("<h2>Recent scans</h2>");
@@ -106,7 +106,7 @@ public static class Dashboard
                 sb.Append("<td>").Append(Time(s.ReceivedAt)).Append("</td>");
                 sb.Append("<td>").Append(H(s.SystemName)).Append("</td>");
                 sb.Append(Num(s.Total)).Append(Num(s.Alive, "up")).Append(Num(s.Risky, "risk")).Append(Num(s.HighRisk, "risk"));
-                sb.Append("<td><a href=\"/api/uploads/").Append(s.UploadId.ToString(CultureInfo.InvariantCulture)).Append("\">download</a></td>");
+                sb.Append("<td><a href=\"/reports/").Append(s.UploadId.ToString(CultureInfo.InvariantCulture)).Append("\">download</a></td>");
                 sb.Append("</tr>");
             }
             sb.Append("</tbody></table></div>");
@@ -122,7 +122,7 @@ public static class Dashboard
             }
             else
             {
-                sb.Append("<div class=\"wrap\"><table><thead><tr><th>IP</th><th>Alive</th><th>Name</th><th>MAC</th><th>Vendor</th><th>Ports</th>")
+                sb.Append("<div class=\"wrap\"><table><thead><tr><th>IP</th><th>Alive</th><th>Name</th><th>Model</th><th>OS</th><th>MAC</th><th>Vendor</th><th>Ports</th><th>Service</th>")
                   .Append("<th class=\"num\">Risk</th><th>Prohibited</th></tr></thead><tbody>");
                 foreach (HostRow h in hosts)
                 {
@@ -130,9 +130,12 @@ public static class Dashboard
                     sb.Append("<td>").Append(H(h.Ip)).Append("</td>");
                     sb.Append(h.Alive ? "<td class=\"up\">up</td>" : "<td class=\"muted\">down</td>");
                     sb.Append("<td>").Append(H(h.Name)).Append("</td>");
+                    sb.Append("<td>").Append(H(h.Model)).Append("</td>");
+                    sb.Append("<td>").Append(H(h.Os)).Append("</td>");
                     sb.Append("<td>").Append(H(h.Mac)).Append("</td>");
                     sb.Append("<td>").Append(H(h.Vendor)).Append("</td>");
                     sb.Append("<td>").Append(H(h.Ports)).Append("</td>");
+                    sb.Append("<td>").Append(H(Clip(h.Service, 60))).Append("</td>");
                     sb.Append(Num(h.RiskScore, h.RiskScore >= ScanCsvParser.HighRiskThreshold ? "risk" : null));
                     sb.Append(h.HasProhibited ? "<td class=\"risk\">yes</td>" : "<td class=\"muted\">no</td>");
                     sb.Append("</tr>");
@@ -159,6 +162,9 @@ public static class Dashboard
         Layout("Forbidden", "<h1>Forbidden</h1><p>Your token is not allowed to view site <b>" + H(site) + "</b>.</p><p><a href=\"/\">Back to sites</a></p>", who);
 
     private const string Dash = "<span class=\"muted\">&mdash;</span>";
+
+    // 배너 같은 긴 값은 표가 옆으로 끝없이 늘어나지 않도록 자른다.
+    private static string Clip(string s, int max) => s.Length <= max ? s : s.Substring(0, max - 1) + "…";
 
     private static string Num(int? v, string? cls = null)
     {

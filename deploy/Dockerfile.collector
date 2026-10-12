@@ -1,18 +1,31 @@
 # 중앙 수집 서버 컨테이너. 리버스 프록시(TLS 종료) 뒤에 두고, 업로드 데이터는 /data 볼륨에 둔다.
-#   docker build -f deploy/Dockerfile.collector -t netscan-collector .
+#   docker build -f deploy/Dockerfile.collector --build-arg VERSION=2.1.0 -t netscan-collector .
 #   docker run -d -p 8080:8080 -v netscan-collector:/data \
-#     -e COLLECTOR__DATADIR=/data -e COLLECTOR__TOKENS__0__TOKEN=<32+ chars> -e COLLECTOR__TOKENS__0__SITE=Office-3F \
+#     -e COLLECTOR__TOKENS__0__TOKEN=<32+ chars> -e COLLECTOR__TOKENS__0__SITE=Office-3F \
 #     -e COLLECTOR__ADMINTOKEN=<32+ chars> netscan-collector
+# 비루트 사용자(app, aspnet 기본 이미지 제공)로 실행한다. 호스트 디렉터리를 /data 에 마운트할 때는 uid 1654 가 쓸 수 있어야 한다.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG VERSION=2.1.0
 WORKDIR /src
 COPY . .
-RUN dotnet publish NetworkScanner.Collector/NetworkScanner.Collector.csproj -c Release -o /out
+RUN dotnet publish NetworkScanner.Collector/NetworkScanner.Collector.csproj -c Release -p:Version=${VERSION} -o /out
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+ARG VERSION=2.1.0
+LABEL org.opencontainers.image.title="netscan-collector" \
+      org.opencontainers.image.description="NetworkScanner central report collector" \
+      org.opencontainers.image.version="${VERSION}"
+# aspnet 이미지에는 curl이 없어 HEALTHCHECK 용으로 설치한다(/healthz).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data \
+    && chown app:app /data
 WORKDIR /app
 COPY --from=build /out .
+USER app
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080 COLLECTOR__DATADIR=/data
 VOLUME ["/data"]
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
 ENTRYPOINT ["dotnet", "netscan-collector.dll"]

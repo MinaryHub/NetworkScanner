@@ -26,6 +26,8 @@ dotnet run --project NetworkScanner.Service -- --run-once
 
 # Tests (xUnit, Core only, no network needed except two loopback tests)
 dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj
+dotnet test NetworkScanner.Cli.Tests/NetworkScanner.Cli.Tests.csproj            # CLI parser / table renderer
+dotnet test NetworkScanner.Collector.Tests/NetworkScanner.Collector.Tests.csproj # collector (in-memory server)
 
 # A single test
 dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --filter "FullyQualifiedName~ScanEngineIntegrationTests"
@@ -35,7 +37,7 @@ Tests set `UserDataPaths.OverrideRoot` and `AppSettingsStore.SecretStore` to tem
 
 ## Architecture
 
-**All real logic lives in `NetworkScanner.Core` (plain `net10.0`, no UI dependency). Core contains no `OperatingSystem.Is*`, `Process.Start` or `DllImport` outside the designated adapter folders (`Platform/`, `Secrets/`).** The front-ends are thin adapters.
+**All real logic lives in `NetworkScanner.Core` (plain `net10.0`, no UI dependency). Core contains no `OperatingSystem.Is*`, `Process.Start` or `DllImport` outside the designated adapter files/folders: `Platform/` (ARP tables), `Secrets/` (credential stores), `Network/TtlProbe.cs` (ping utility for TTL), `Discovery/Infrastructure/` (neighbor tables, raw-socket ARP), `Capture/` (pcap), `Updates/` (self-update helper) and `UserDataPaths.cs` (per-OS data folder). `Network/NetworkProbes.cs` has one `IsWindows()` check for the ping TTL option. Do not add OS checks anywhere else.** The front-ends are thin adapters.
 
 - **`NetworkScanner.Core`**
   - `ScanEngine` — the center. Two-phase range scan (parallel ping + TCP liveness → enrichment of alive hosts), single-host port checks, CSV load/save, change detection, history recording, report + upload.
@@ -63,9 +65,10 @@ Tests set `UserDataPaths.OverrideRoot` and `AppSettingsStore.SecretStore` to tem
   - `AppLogger` — daily rolling files in `<userdata>/logs`, `Sink` event for hosts to mirror to console/UI. No Windows EventLog.
   - `Localization` — all user-visible Core strings go through `Localization.T(key)` (en/ko). Do not add hardcoded Korean/English strings to Core.
 - **`NetworkScanner.Avalonia`** — the only GUI. `MainWindow` implements `IScanConfigProvider` by delegating to `SettingsView`. Views: IP list, Settings (upload/notifications/limits with `AppSettingsData.Validate()`), Ref. ports, History, User guide. `UpdateService` = Velopack + GitHub Releases.
-- **`NetworkScanner.Cli`** — `netscan`: scan (`--use-settings`, `--upload`, `--notify`, `--scheduled`, `--profile`, `-o pdf`) plus `history`, `assets`, `alerts`, `settings export|import` and `diag` subcommands. Progress → stderr, results → stdout, exit code 3 when risky ports were found.
+- **`NetworkScanner.Cli`** — `netscan`: scan (`--use-settings`, `--upload`, `--notify`, `--scheduled`, `--profile`, `-o csv` uses `ScanEngine.BuildCsv`, `-o pdf`) plus `history`, `assets` (incl. `delete`), `alerts`, `settings export|import`, `diag` and `update` subcommands. `CliOptions.Parse` validates ranges (IPv4 only, start <= end) and subcommand names; `CliScanOptions.Build` applies settings → `--profile` → explicit options. `--upload` without `--scheduled` writes the CSV to `env/` and sends it through `UploadService` itself. Progress → stderr (suppressed when not a terminal), results → stdout, exit codes 0/1/2/3/10. Tests: `NetworkScanner.Cli.Tests` (parser, `TableRenderer`; `InternalsVisibleTo`).
 - **`NetworkScanner.Service`** — `netscan-service`: `Microsoft.Extensions.Hosting` worker (Windows Service / systemd / launchd / foreground) running the schedule from `settings.json` with last-run catch-up. Unit/plist/PowerShell installers live in `deploy/`.
-- **`NetworkScanner.Tests`** — xUnit, references Core only.
+- **`NetworkScanner.Collector`** — `netscan-collector`: ASP.NET Core minimal API that receives the scanners' HTTPS uploads (`POST /api/scan`, `/api/upload`, `/`; one Bearer token per site, optional admin token), stores files under `<DataDir>/sites/<site>/<yyyy>/<MM>/`, indexes them in `collector.db` (`uploads`, `scans`, `scan_hosts` incl. OS/model/service/switch port/approval; schema via `PRAGMA user_version` + add-column migration), parses CSVs with `ScanCsvParser` (header-mapped; system name taken from the engine's file naming), prunes each site to `ScansPerSite` scans + report files, and serves a JSON API (`/api/sites`, `/api/sites/{site}/scans[/{id}/hosts]`, `/api/uploads/{id}`) plus a cookie-session dashboard (`/login` form only — no `?token=`, per-IP login rate limit; `/`, `/sites/{site}`, `/reports/{id}`). Tests: `NetworkScanner.Collector.Tests` (WebApplicationFactory, temp data dir).
+- **`NetworkScanner.Tests`** — xUnit, references Core only. **`NetworkScanner.Cli.Tests`** — xUnit for the CLI parser/renderer.
 - **`data/`** — `ouiinfo.ini` (raw IEEE `oui.txt`; refresh with `tools/update-oui.sh`), `reservedports.ini`, `prohibitports.ini`; linked into the GUI/CLI/service outputs. **`assets/`** — icon and toolbar images.
 
 ### Events and threading (read before touching the scan loop)
@@ -87,4 +90,4 @@ The engine reports through events; UI handlers marshal to the UI thread: `Messag
 
 ## Releases
 
-Pushing `vMAJOR.MINOR.PATCH` runs `.github/workflows/release.yml`: Velopack GUI packages for win-x64/arm64, osx-arm64/x64, linux-x64/arm64 (channels `win`, `win-arm64`, `osx`, `osx-x64`, `linux`, `linux-arm64` — `UpdateService` must pick the matching channel), CLI+service archives, a `ghcr.io/<owner>/netscan` Docker image, and a GitHub Release. Code signing/notarization runs only when the documented secrets exist; otherwise packages are unsigned (Gatekeeper/SmartScreen warnings expected). `build-and-test.yml` runs tests and the full build on all three OSes plus a vulnerable-package check.
+Pushing `vMAJOR.MINOR.PATCH` runs `.github/workflows/release.yml`: Velopack GUI packages for win-x64/arm64, osx-arm64/x64, linux-x64/arm64 (channels `win`, `win-arm64`, `osx`, `osx-x64`, `linux`, `linux-arm64` — `UpdateService` must pick the matching channel), CLI+service archives, a `ghcr.io/<owner>/netscan` Docker image, and a GitHub Release. Code signing/notarization runs only when the documented secrets exist; otherwise packages are unsigned (Gatekeeper/SmartScreen warnings expected). `release.yml` runs a `test` job first; packaging, Docker and the release depend on it. `build-and-test.yml` builds the solution and runs the Core + CLI tests on all three OSes (collector tests and a vulnerable-package check on Linux) and builds both Docker images; Velopack packaging there is `workflow_dispatch` only.

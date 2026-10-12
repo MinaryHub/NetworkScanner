@@ -40,6 +40,12 @@ AppLogger.Sink += (level, _, m) => { if (level >= NetworkScanner.LogLevel.Error)
 // --use-settings: GUI와 같은 settings.json(대역/포트/업로드/알림)을 그대로 사용한다. 명령행 옵션이 있으면 그것이 우선한다.
 AppSettingsData? saved = options.UseSettings ? AppSettingsStore.LoadSettings() : null;
 Localization.Current = options.LanguageSet ? options.Language : (saved?.Language ?? options.Language);
+if (saved != null)
+{
+    // GUI의 설정 화면과 같은 검사를 거쳐 잘못된 값을 경고로 알린다(스캔은 계속한다).
+    foreach (string problem in saved.Validate())
+        Console.Error.WriteLine("warn: settings.json: " + problem);
+}
 
 switch (options.Command)
 {
@@ -93,11 +99,8 @@ var items = new IPInfoList();
 var services = options.NoDiscovery
     ? ScanServices.CreateDefault(withHistory: !options.NoHistory)
     : ScanServices.CreateDefault(saved ?? new AppSettingsData(), withHistory: !options.NoHistory);
-var engineOptions = saved != null ? ScanOptions.FromSettings(saved) : new ScanOptions();
-if (options.Parallelism > 0) engineOptions.Parallelism = options.Parallelism;
-engineOptions.RiskAllowList.AddRange(options.Allow);
-if (options.Profile != null) ScanProfiles.Apply(engineOptions, ScanProfiles.Parse(options.Profile));
-if (options.NoDiscovery) engineOptions.DeepDiscovery = false;
+// 설정 → --profile → 명시적 옵션 순으로 적용해 --parallelism 같은 명시값이 프로필을 이긴다.
+var engineOptions = CliScanOptions.Build(options, saved);
 var engine = new ScanEngine(items, oui, config, services, engineOptions);
 
 bool quiet = options.Quiet || Console.IsErrorRedirected;
@@ -130,7 +133,7 @@ if (options.NoHistory && notifier != null)
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; engine.ScanningStop(); };
 
 engine.InitFromConfig();
-// --scheduled: GUI의 예약 스캔과 동일하게 CSV/HTML 리포트를 env/에 남기고 업로드 설정이면 업로드한다(cron/서비스용).
+// --scheduled: GUI의 예약 스캔과 동일하게 CSV/HTML/PDF 리포트를 env/에 남기고 업로드 설정이면 업로드한다(cron/서비스용).
 bool started = options.Scheduled
     ? engine.StartSchedulingScan(config.GetSystemName())
     : engine.StartRefreshAllRange(config.GetSystemName());
@@ -145,6 +148,12 @@ if (engine.Scanning != null) await engine.Scanning;
 string ts = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 List<IPInfo> results;
 lock (engine.ItemsSyncRoot) results = new(items);
+
+// --upload 없이 --scheduled 만 주면 엔진이 예약 스캔 경로에서 저장+업로드를 끝냈다.
+// --upload 만 주면 엔진은 아무것도 저장하지 않으므로 여기서 CSV를 env/에 쓰고 직접 올린다.
+if (options.Upload && !options.Scheduled && saved != null)
+    await UploadResultsAsync(services, saved, results, config.GetSystemName());
+
 if (options.Output == OutputFormat.Pdf)
 {
     if (options.OutFile == null) { Console.Error.WriteLine("error: -o pdf requires --out <file>"); return 2; }
@@ -157,7 +166,8 @@ if (options.Output == OutputFormat.Pdf)
 string rendered = options.Output switch
 {
     OutputFormat.Json => ReportGenerator.BuildJson(results, config.GetSystemName(), ts),
-    OutputFormat.Csv => BuildCsv(results),
+    // GUI/예약 스캔과 같은 열 구성이라 GUI의 "불러오기"와 수집 서버가 그대로 읽을 수 있다.
+    OutputFormat.Csv => ScanEngine.BuildCsv(results),
     OutputFormat.Html => ReportGenerator.BuildHtml(results, config.GetSystemName(), ts),
     _ => TableRenderer.Render(results),
 };
@@ -181,17 +191,62 @@ static string SafeHostName()
     try { return Dns.GetHostName(); } catch { return "netscan"; }
 }
 
-static string BuildCsv(IReadOnlyList<IPInfo> items)
+// 결과 CSV를 엔진과 같은 이름 규칙(<system>_yyyyMMdd_HHmmss.csv)으로 env/에 저장한 뒤 업로드 창구(즉시 전송, 실패 시 outbox)로 보낸다.
+static async Task UploadResultsAsync(ScanServices services, AppSettingsData saved, IReadOnlyList<IPInfo> results, string systemName)
 {
-    var sb = new StringBuilder();
-    sb.AppendLine(CsvCodec.FormatLine(new[] { "IPAddress", "Status", "Name", "Type", "OS", "Ports", "Service", "MAC", "Vendor", "RTT" }));
-    foreach (var i in items)
-        sb.AppendLine(CsvCodec.FormatLine(new[]
-        {
-            i.Ip, i.StatusText, i.SystemName, i.DeviceType, i.OsGuess,
-            i.Ports, i.Service, i.Macaddr, i.Vendor, i.RountTime
-        }));
-    return sb.ToString();
+    if (!saved.Upload.Enabled)
+    {
+        Console.Error.WriteLine("warn: --upload given but result upload is disabled in settings.json; nothing uploaded.");
+        return;
+    }
+    if (services.Uploader == null)
+    {
+        Console.Error.WriteLine("warn: upload service unavailable; nothing uploaded.");
+        return;
+    }
+    if (results.Count == 0)
+    {
+        Console.Error.WriteLine("warn: no results to upload.");
+        return;
+    }
+
+    string fileName;
+    string fullPath;
+    try
+    {
+        string dir = ScanEngine.GetEnvDirectory();
+        Directory.CreateDirectory(dir);
+        fileName = $"{ScanEngine.SanitizeFileNameComponent(systemName)}{DateTime.Now:_yyyyMMdd_HHmmss}.csv";
+        fullPath = Path.Combine(dir, fileName);
+        await File.WriteAllTextAsync(fullPath, ScanEngine.BuildCsv(results), new UTF8Encoding(false));
+        Console.Error.WriteLine($"info: saved {fullPath}");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine("error: could not save result CSV for upload: " + ex.Message);
+        return;
+    }
+
+    try
+    {
+        bool sent = await services.Uploader.UploadAsync(fullPath, saved.Upload, m => Console.Error.WriteLine("upload: " + m), CancellationToken.None);
+        if (sent)
+            Console.Error.WriteLine($"info: uploaded {fileName} ({saved.Upload.Protocol} → {saved.Upload.Host})");
+        else
+            Console.Error.WriteLine($"warn: upload of {fileName} failed; queued in outbox ({services.Uploader.Outbox.Count} pending), retried on the next upload");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine("error: upload failed: " + ex.Message);
+    }
+}
+
+// stdin에서 y/N 확인을 받는다. -y 로 건너뛸 수 있다.
+static bool Confirm(string prompt)
+{
+    Console.Error.Write(prompt + " [y/N] ");
+    string? answer = Console.ReadLine();
+    return string.Equals(answer?.Trim(), "y", StringComparison.OrdinalIgnoreCase);
 }
 
 // netscan history [scans|inventory|host <ip>|prune <days>]
@@ -252,6 +307,7 @@ static int RunHistory(CliOptions o)
 
 static string Trunc(string s, int n) => s.Length <= n ? s : s.Substring(0, n - 1) + "…";
 
+// netscan assets [list|approve|unapprove|set|delete]
 static int RunAssets(CliOptions o)
 {
     using var store = new ScanHistoryStore(ScanHistoryStore.DefaultPath);
@@ -262,6 +318,7 @@ static int RunAssets(CliOptions o)
         case "unapprove":
         {
             bool approve = o.Sub == "approve";
+            if (!o.All && o.Args.Count == 0) { Console.Error.WriteLine($"error: assets {o.Sub} <ip…> | --all"); return 2; }
             IEnumerable<string> ips = o.All
                 ? store.GetInventory().Where(h => h.LastAlive).Select(h => h.Ip)
                 : o.Args;
@@ -272,8 +329,35 @@ static int RunAssets(CliOptions o)
         case "set":
         {
             if (o.Args.Count == 0) { Console.Error.WriteLine("error: assets set <ip> --owner X --tags a,b --note N"); return 2; }
-            store.SetHostMeta(o.Args[0], o.Owner, o.Tags, o.Note);
+            if (o.Owner == null && o.Tags == null && o.Note == null)
+            {
+                Console.Error.WriteLine("error: assets set needs at least one of --owner, --tags, --note");
+                return 1;
+            }
+            if (!store.SetHostMeta(o.Args[0], o.Owner, o.Tags, o.Note))
+            {
+                Console.Error.WriteLine($"error: could not update host {o.Args[0]}");
+                return 1;
+            }
+            Console.Error.WriteLine($"info: updated {o.Args[0]}");
             return 0;
+        }
+        case "delete":
+        {
+            if (o.Args.Count == 0) { Console.Error.WriteLine("error: assets delete <ip…> [-y]"); return 2; }
+            if (!o.Yes && !Confirm($"delete {string.Join(", ", o.Args)} from the inventory (scan history is kept)?"))
+            {
+                Console.Error.WriteLine("info: cancelled");
+                return 1;
+            }
+            int deleted = 0;
+            foreach (string ip in o.Args)
+            {
+                if (store.DeleteHost(ip)) deleted++;
+                else Console.Error.WriteLine($"warn: host {ip} not found in inventory");
+            }
+            Console.Error.WriteLine($"info: {deleted} host(s) deleted");
+            return deleted == o.Args.Count ? 0 : 1;
         }
         default:
         {
@@ -291,6 +375,7 @@ static int RunAssets(CliOptions o)
     }
 }
 
+// netscan alerts [list|ack|snooze|reopen]
 static int RunAlerts(CliOptions o)
 {
     using var store = new ScanHistoryStore(ScanHistoryStore.DefaultPath);
@@ -304,7 +389,7 @@ static int RunAlerts(CliOptions o)
             AlertState state = o.Sub switch { "ack" => AlertState.Acknowledged, "snooze" => AlertState.Snoozed, _ => AlertState.Open };
             DateTimeOffset? until = null;
             if (state == AlertState.Snoozed)
-                until = DateTimeOffset.UtcNow.AddHours(o.Args.Count > 1 && double.TryParse(o.Args[1], out double h) ? h : 24);
+                until = DateTimeOffset.UtcNow.AddHours(o.Args.Count > 1 && double.TryParse(o.Args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out double h) ? h : 24);
             bool ok = store.SetAlertState(id, state, until, o.Note);
             Console.Error.WriteLine(ok ? $"info: alert {id} → {state}" : $"error: alert {id} not found");
             return ok ? 0 : 1;
@@ -349,12 +434,7 @@ static async Task<int> RunUpdateAsync(CliOptions o)
         if (found == null) { Console.Error.WriteLine($"info: up to date (v{current.ToString(3)})"); return 0; }
         Console.Error.WriteLine($"info: v{found.Version.ToString(3)} available ({found.Archive.Name}, {found.Archive.Size / 1024 / 1024} MB){(found.ExpectedSha256 == null ? " - no checksum published" : "")}");
         if (o.Sub == "check") return 10;
-        if (!o.Yes)
-        {
-            Console.Error.Write("apply update now? [y/N] ");
-            string? answer = Console.ReadLine();
-            if (!string.Equals(answer?.Trim(), "y", StringComparison.OrdinalIgnoreCase)) return 1;
-        }
+        if (!o.Yes && !Confirm("apply update now?")) return 1;
         string stage = await updater.DownloadAndStageAsync(found, requireChecksum: true,
             p => { if (!Console.IsErrorRedirected) Console.Error.Write($"\rdownloading {p}%   "); }, CancellationToken.None);
         Console.Error.WriteLine();
