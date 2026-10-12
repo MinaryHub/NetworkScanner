@@ -23,7 +23,6 @@
         <Color x:Key="TealLightColor">#FF2DD4BF</Color>
         <Color x:Key="UpColor">#FF15803D</Color>
         <Color x:Key="WarnColor">#FFB45309</Color>
-        <Color x:Key="WarnTintColor">#FFFEF3C7</Color>
         <Color x:Key="RiskColor">#FFB91C1C</Color>
         <Color x:Key="RiskTintColor">#FFFDECEA</Color>
 
@@ -41,8 +40,8 @@
         <SolidColorBrush x:Key="TealTintBrush" Color="{StaticResource TealTintColor}" />
         <SolidColorBrush x:Key="TealLightBrush" Color="{StaticResource TealLightColor}" />
         <SolidColorBrush x:Key="UpBrush" Color="{StaticResource UpColor}" />
+        <!-- WarnBrush(중간 심각도 배지)와 TealLightBrush(사이드바 활성 표시)는 코드(ThemeBrushes.Get)에서 이름으로 찾아 쓴다. -->
         <SolidColorBrush x:Key="WarnBrush" Color="{StaticResource WarnColor}" />
-        <SolidColorBrush x:Key="WarnTintBrush" Color="{StaticResource WarnTintColor}" />
         <SolidColorBrush x:Key="RiskBrush" Color="{StaticResource RiskColor}" />
         <SolidColorBrush x:Key="RiskTintBrush" Color="{StaticResource RiskTintColor}" />
         <SolidColorBrush x:Key="SideTextBrush" Color="#FFC9D3DE" />

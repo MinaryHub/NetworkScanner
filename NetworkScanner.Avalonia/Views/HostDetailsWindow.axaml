@@ -2,9 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:NetworkScanner.Avalonia.Helpers"
         x:Class="NetworkScanner.Avalonia.Views.HostDetailsWindow"
-        Title="{l:Tr Key=details.title}" Width="640" Height="560" MinWidth="480" MinHeight="360"
+        Title="{l:Tr Key=details.title}" Width="720" Height="680" MinWidth="560" MinHeight="420"
         WindowStartupLocation="CenterOwner">
-    <!-- 호스트 한 대의 식별 정보(SNMP sysDescr, 이름 출처, OS/장비 추정)와 취약점 평가 결과를 보여주는 읽기 전용 창. -->
+    <!-- 호스트 한 대의 식별 정보(모델/MAC/제조사/포트/서비스, SNMP sysDescr, 이름 출처, OS/장비 추정)와 취약점 평가 결과, 근거(사실) 목록을 보여주는 읽기 전용 창. -->
     <Grid RowDefinitions="Auto,Auto,*,*,Auto" Margin="20" RowSpacing="12">
         <StackPanel Grid.Row="0" Spacing="2">
             <TextBlock Name="TbIp" Classes="h1 mono" />
@@ -12,23 +12,43 @@
         </StackPanel>
 
         <Border Grid.Row="1" Classes="card">
-            <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="12">
-                <TextBlock Grid.Row="0" Grid.Column="0" Classes="caption" Text="{l:Tr Key=details.sysdescr}" />
-                <TextBlock Grid.Row="0" Grid.Column="1" Name="TbSysDescr" TextWrapping="Wrap" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Classes="caption" Text="{l:Tr Key=details.source}" />
-                <TextBlock Grid.Row="1" Grid.Column="1" Name="TbSource" Classes="mono" />
+            <Grid ColumnDefinitions="130,*,130,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="12">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.model}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Name="TbModel" TextWrapping="Wrap" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Classes="caption" Text="{l:Tr Key=col.mac}" />
+                <TextBlock Grid.Row="0" Grid.Column="3" Name="TbMac" Classes="mono" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.vendor}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Name="TbVendor" TextWrapping="Wrap" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Classes="caption" Text="{l:Tr Key=col.ipv6}" />
+                <TextBlock Grid.Row="1" Grid.Column="3" Name="TbIpv6" Classes="mono" TextWrapping="Wrap" />
+
                 <TextBlock Grid.Row="2" Grid.Column="0" Classes="caption" Text="{l:Tr Key=details.os}" />
                 <TextBlock Grid.Row="2" Grid.Column="1" Name="TbOs" />
+                <TextBlock Grid.Row="2" Grid.Column="2" Classes="caption" Text="{l:Tr Key=col.osversion}" />
+                <TextBlock Grid.Row="2" Grid.Column="3" Name="TbOsVersion" TextWrapping="Wrap" />
+
                 <TextBlock Grid.Row="3" Grid.Column="0" Classes="caption" Text="{l:Tr Key=details.device}" />
                 <TextBlock Grid.Row="3" Grid.Column="1" Name="TbDevice" />
-                <TextBlock Grid.Row="4" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.osversion}" />
-                <TextBlock Grid.Row="4" Grid.Column="1" Name="TbOsVersion" />
-                <TextBlock Grid.Row="5" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.switchport}" />
-                <TextBlock Grid.Row="5" Grid.Column="1" Name="TbSwitchPort" Classes="mono" />
-                <TextBlock Grid.Row="6" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.risk}" />
-                <TextBlock Grid.Row="6" Grid.Column="1" Name="TbRisk" Classes="mono" />
-                <TextBlock Grid.Row="7" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.approved}" />
-                <TextBlock Grid.Row="7" Grid.Column="1" Name="TbApproved" />
+                <TextBlock Grid.Row="3" Grid.Column="2" Classes="caption" Text="{l:Tr Key=col.switchport}" />
+                <TextBlock Grid.Row="3" Grid.Column="3" Name="TbSwitchPort" Classes="mono" />
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.risk}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Name="TbRisk" Classes="mono" />
+                <TextBlock Grid.Row="4" Grid.Column="2" Classes="caption" Text="{l:Tr Key=col.approved}" />
+                <TextBlock Grid.Row="4" Grid.Column="3" Name="TbApproved" />
+
+                <TextBlock Grid.Row="5" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.ports}" />
+                <TextBlock Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="3" Name="TbPorts" Classes="mono" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="6" Grid.Column="0" Classes="caption" Text="{l:Tr Key=col.service}" />
+                <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="3" Name="TbService" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="7" Grid.Column="0" Classes="caption" Text="{l:Tr Key=details.sysdescr}" />
+                <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="3" Name="TbSysDescr" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="8" Grid.Column="0" Classes="caption" Text="{l:Tr Key=details.source}" />
+                <TextBlock Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="3" Name="TbSource" Classes="mono" />
             </Grid>
         </Border>
 

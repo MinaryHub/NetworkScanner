@@ -26,9 +26,9 @@ namespace NetworkScanner.Avalonia.Views
         public IScanConfigProvider? Config { get; set; }
 
         // 엔진 이벤트를 UI 스레드에서 다시 내보낸다. MainWindow가 알림 전송/outbox 갱신에 쓴다.
-        public event Action<IReadOnlyList<ScanChange>>? ChangesDetected;
         // 알림 운영 규칙(중복 억제/확인/스누즈/점검 시간대)을 거친 결과. 외부 채널 알림은 이것의 ChangesToNotify만 보낸다.
         public event Action<AlertOutcome>? AlertsProcessed;
+        public event Action? ScanStarted;
         public event Action? ScanFinished;
         // 상단 프로필 콤보로 스캔 프로필을 바꿔 저장했을 때(설정 화면이 따라오도록).
         public event Action<string>? ProfileChanged;
@@ -56,6 +56,7 @@ namespace NetworkScanner.Avalonia.Views
             if (options != null) SetProfile(ScanProfiles.Name(options.Profile));
             // 이력 DB가 없으면 승인 자체가 불가능하므로 메뉴를 비활성화한다.
             SetMenuItemEnabled("MenuItemApprove", services?.History != null);
+            SetMenuItemEnabled("MenuItemUnapprove", services?.History != null);
             _engine.Message += msg => Dispatcher.UIThread.Post(() => TbStatusLine.Text = msg);
             _engine.ProgressMaxChanged += max => Dispatcher.UIThread.Post(() =>
             {
@@ -75,7 +76,11 @@ namespace NetworkScanner.Avalonia.Views
                 TbDown.Text = dead.ToString();
             });
             _engine.ItemsRefreshNeeded += RequestGridRefresh;
-            _engine.ScanStarted += () => Dispatcher.UIThread.Post(() => SetScanningState(true));
+            _engine.ScanStarted += () => Dispatcher.UIThread.Post(() =>
+            {
+                SetScanningState(true);
+                ScanStarted?.Invoke();
+            });
             _engine.ScanFinished += () => Dispatcher.UIThread.Post(() =>
             {
                 SetScanningState(false);
@@ -83,11 +88,7 @@ namespace NetworkScanner.Avalonia.Views
                 TbProgressPercent.Text = "";
                 ScanFinished?.Invoke();
             });
-            _engine.ScanChangesDetected += changes => Dispatcher.UIThread.Post(() =>
-            {
-                ReportChanges(changes);
-                ChangesDetected?.Invoke(changes);
-            });
+            _engine.ScanChangesDetected += changes => Dispatcher.UIThread.Post(() => ReportChanges(changes));
             _engine.AlertsProcessed += outcome => Dispatcher.UIThread.Post(() => AlertsProcessed?.Invoke(outcome));
 
             _engine.InitFromConfig();
@@ -169,11 +170,11 @@ namespace NetworkScanner.Avalonia.Views
             }
         }
 
-        // 사용자가 조절한 컬럼 너비를 열 순서대로 쉼표 문자열로 반환한다(설정 저장용).
+        // 사용자가 조절한 컬럼 너비를 컬럼 Tag 기준 문자열로 반환한다(설정 저장용).
         public string GetColumnWidths() => ColumnLayout.Serialize(DgIPList);
 
         // 저장된 컬럼 너비를 복원한다(앱 시작 시 호출).
-        public void ApplyColumnWidths(string csv) => ColumnLayout.Apply(DgIPList, csv);
+        public void ApplyColumnWidths(string saved) => ColumnLayout.Apply(DgIPList, saved);
 
         // 병렬 스캔은 초당 수백 번 갱신을 요청할 수 있으므로, 이미 예약된 갱신이 있으면 무시해 병합한다.
         private volatile bool _refreshPending;
@@ -191,7 +192,7 @@ namespace NetworkScanner.Avalonia.Views
         // 스캔 진행 중에는 "스캔" 버튼을 비활성화하고 "취소" 버튼만 눌리도록 해 중복 스캔 시작을 막는다.
         private void SetScanningState(bool scanning)
         {
-            BtnRefresh.IsEnabled = !scanning;
+            BtnScan.IsEnabled = !scanning;
             BtnStop.IsEnabled = scanning;
             TbScanLabel.Text = scanning ? Localization.T("btn.scanning") : Localization.T("btn.scan");
         }
@@ -235,16 +236,16 @@ namespace NetworkScanner.Avalonia.Views
             }
         }
 
-        private void ChkAliveOnly_Changed(object? sender, RoutedEventArgs e) => RefreshGrid();
+        private void Filter_Changed(object? sender, RoutedEventArgs e) => RefreshGrid();
 
+        // 검색은 표에 보이는 텍스트 컬럼 전부를 대상으로 한다(파생값인 종류/OS 추정 포함).
         private static bool Matches(IPInfo info, string keyword)
         {
-            return (info.Ip?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
-                || (info.SystemName?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
-                || (info.Macaddr?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
-                || (info.Vendor?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
-                || (info.Ports?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
-                || (info.Description?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false);
+            return Has(info.Ip) || Has(info.SystemName) || Has(info.Macaddr) || Has(info.Vendor)
+                || Has(info.Ports) || Has(info.Description) || Has(info.Model) || Has(info.OsVersion)
+                || Has(info.DeviceType) || Has(info.OsGuess) || Has(info.Service) || Has(info.SwitchPort);
+
+            bool Has(string? text) => text?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false;
         }
 
         private void TbSearch_TextChanged(object? sender, TextChangedEventArgs e) => RefreshGrid();
@@ -272,13 +273,11 @@ namespace NetworkScanner.Avalonia.Views
         // 연속 모니터링용: 자동저장 없이 전체 대역을 재스캔한다(변화 감지 알림은 그대로 동작).
         public void StartScan() => _engine?.StartRefreshAllRange(Config?.GetSystemName() ?? "");
 
-        public void ScanningStop() => _engine?.ScanningStop();
-
         public bool IsScanning() => _engine?.IsScanning() ?? false;
 
         public void GetLatestFilePath(string prefixName) => _engine?.GetLatestFilePath(prefixName);
 
-        private void BtnRefresh_Click(object? sender, RoutedEventArgs e)
+        private void BtnScan_Click(object? sender, RoutedEventArgs e)
         {
             _engine?.StartRefreshAllRange(Config?.GetSystemName() ?? "");
         }
@@ -307,10 +306,10 @@ namespace NetworkScanner.Avalonia.Views
 
             var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "IP 목록 CSV 열기",
+                Title = Localization.T("iplist.open.title"),
                 AllowMultiple = false,
                 SuggestedStartLocation = await topLevel.StorageProvider.TryGetFolderFromPathAsync(envDir),
-                FileTypeFilter = new[] { new FilePickerFileType("CSV files") { Patterns = new[] { "*.csv" } } },
+                FileTypeFilter = new[] { new FilePickerFileType(Localization.T("file.csv")) { Patterns = new[] { "*.csv" } } },
             });
 
             var file = files.FirstOrDefault();
@@ -394,22 +393,25 @@ namespace NetworkScanner.Avalonia.Views
             _ = dialog.ShowDialog(owner);
         }
 
-        // 선택한 호스트를 알려진 자산으로 승인(이력 DB의 hosts.approved). 현재 MAC이 승인 MAC으로 고정된다.
-        private void MenuItemApprove_Click(object? sender, RoutedEventArgs e)
+        // 선택한 호스트를 알려진 자산으로 승인/해제(이력 DB의 hosts.approved, HistoryView와 같은 SetApproved). 승인 시 현재 MAC이 승인 MAC으로 고정된다.
+        private void MenuItemApprove_Click(object? sender, RoutedEventArgs e) => SetApproved(true);
+        private void MenuItemUnapprove_Click(object? sender, RoutedEventArgs e) => SetApproved(false);
+
+        private void SetApproved(bool approved)
         {
             IPInfo? info = SelectedItem;
             var history = Services?.History;
             if (info == null || history == null) return;
             try
             {
-                history.SetApproved(new[] { info.Ip }, true, DateTimeOffset.Now);
-                info.Approved = true;
+                history.SetApproved(new[] { info.Ip }, approved, DateTimeOffset.Now);
+                info.Approved = approved;
                 RefreshGrid();
-                TbMsg.Text = string.Format(Localization.T("msg.asset.approved"), 1);
+                TbMsg.Text = string.Format(Localization.T(approved ? "msg.asset.approved" : "msg.asset.unapproved"), 1);
             }
             catch (Exception ex)
             {
-                AppLogger.LogError("NetworkScanner", "approve failed", ex);
+                AppLogger.LogError("NetworkScanner", approved ? "approve failed" : "unapprove failed", ex);
                 TbMsg.Text = ex.Message;
             }
         }
@@ -458,10 +460,13 @@ namespace NetworkScanner.Avalonia.Views
             _engine?.StartCheckProhibitPortList(SelectedItem.Ip);
         }
 
+        // 스캔 워커가 동시에 _items를 쓸 수 있으므로 엔진의 쓰기 락 안에서 지운다.
         private void MenuItemRemove_Click(object? sender, RoutedEventArgs e)
         {
             if (SelectedItem == null) return;
-            _items.DelItem(SelectedItem.Ip);
+            string ip = SelectedItem.Ip;
+            object sync = _engine?.ItemsSyncRoot ?? _items;
+            lock (sync) _items.DelItem(ip);
             RefreshGrid();
         }
     }

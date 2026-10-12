@@ -47,7 +47,7 @@
                     <!-- 스캔 프로필(빠름/표준/정밀): 바꾸면 설정에 저장되고 다음 스캔부터 적용된다. -->
                     <ComboBox Name="CmbProfile" Width="130" VerticalAlignment="Center" SelectionChanged="CmbProfile_SelectionChanged"
                               ToolTip.Tip="{helpers:Tr Key=settings.profile}" />
-                    <Button Name="BtnRefresh" Classes="primary" Click="BtnRefresh_Click">
+                    <Button Name="BtnScan" Classes="primary" Click="BtnScan_Click">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Image Source="avares://NetworkScanner.Avalonia/Assets/refresh.png" Width="16" Height="16" />
                             <TextBlock Name="TbScanLabel" VerticalAlignment="Center" Foreground="White" Text="{helpers:Tr Key=btn.scan}" />
@@ -114,8 +114,8 @@
             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
                 <TextBox Name="TbSearch" Width="300" VerticalAlignment="Center"
                          Watermark="{helpers:Tr Key=search.watermark}" TextChanged="TbSearch_TextChanged" />
-                <CheckBox Name="ChkAliveOnly" Content="{helpers:Tr Key=filter.aliveonly}" VerticalAlignment="Center" IsCheckedChanged="ChkAliveOnly_Changed" />
-                <CheckBox Name="ChkRiskOnly" Content="{helpers:Tr Key=filter.riskonly}" VerticalAlignment="Center" IsCheckedChanged="ChkAliveOnly_Changed" />
+                <CheckBox Name="ChkAliveOnly" Content="{helpers:Tr Key=filter.aliveonly}" VerticalAlignment="Center" IsCheckedChanged="Filter_Changed" />
+                <CheckBox Name="ChkRiskOnly" Content="{helpers:Tr Key=filter.riskonly}" VerticalAlignment="Center" IsCheckedChanged="Filter_Changed" />
             </StackPanel>
             <TextBlock Grid.Column="1" Name="TbMsg" Classes="caption" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </Grid>
@@ -131,12 +131,16 @@
             <DataGrid.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="{helpers:Tr Key=menu.ping}" Click="MenuItemPing_Click" />
-                    <MenuItem Header="{helpers:Tr Key=menu.checkport}" Click="MenuItemCheckPort_Click" />
-                    <MenuItem Header="{helpers:Tr Key=menu.checkreserved}" Click="MenuItemCheckReservedPort_Click" />
-                    <MenuItem Header="{helpers:Tr Key=menu.checkprohibit}" Click="MenuItemCheckProhibitPort_Click" />
+                    <!-- 포트 검사 세 가지는 하위 메뉴로 묶는다. -->
+                    <MenuItem Header="{helpers:Tr Key=menu.checkports}">
+                        <MenuItem Header="{helpers:Tr Key=menu.checkport}" Click="MenuItemCheckPort_Click" />
+                        <MenuItem Header="{helpers:Tr Key=menu.checkreserved}" Click="MenuItemCheckReservedPort_Click" />
+                        <MenuItem Header="{helpers:Tr Key=menu.checkprohibit}" Click="MenuItemCheckProhibitPort_Click" />
+                    </MenuItem>
                     <Separator />
                     <MenuItem Header="{helpers:Tr Key=menu.details}" Click="MenuItemDetails_Click" />
                     <MenuItem Name="MenuItemApprove" Header="{helpers:Tr Key=menu.approve}" Click="MenuItemApprove_Click" />
+                    <MenuItem Name="MenuItemUnapprove" Header="{helpers:Tr Key=menu.unapprove}" Click="MenuItemUnapprove_Click" />
                     <Separator />
                     <MenuItem Header="{helpers:Tr Key=menu.wol}" Click="MenuItemWakeOnLan_Click" />
                     <Separator />
@@ -144,7 +148,8 @@
                 </ContextMenu>
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
-                <DataGridTemplateColumn Header="{helpers:Tr Key=col.status}" Width="96" SortMemberPath="StatusText">
+                <!-- Tag는 컬럼 너비 저장 키(ColumnLayout). 컬럼을 추가/재배치해도 저장된 너비가 섞이지 않는다. -->
+                <DataGridTemplateColumn Tag="status" Header="{helpers:Tr Key=col.status}" Width="96" SortMemberPath="StatusText">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0" Spacing="6">
@@ -161,22 +166,22 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="{helpers:Tr Key=col.ip}" Binding="{Binding Ip}" IsReadOnly="True" Width="156" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.name}" Binding="{Binding SystemName}" Width="170" FontFamily="{StaticResource UiFont}" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.type}" Binding="{Binding DeviceType}" IsReadOnly="True" Width="120" FontFamily="{StaticResource UiFont}" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.os}" Binding="{Binding OsGuess}" IsReadOnly="True" Width="110" FontFamily="{StaticResource UiFont}" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.model}" Binding="{Binding Model}" IsReadOnly="True" Width="150" FontFamily="{StaticResource UiFont}" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.osversion}" Binding="{Binding OsVersion}" IsReadOnly="True" Width="170" FontFamily="{StaticResource UiFont}" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.ports}" Binding="{Binding Ports}" Width="150" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.service}" Binding="{Binding Service}" IsReadOnly="True" Width="190" FontFamily="{StaticResource UiFont}" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.mac}" Binding="{Binding Macaddr}" Width="180" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.vendor}" Binding="{Binding Vendor}" Width="150" FontFamily="{StaticResource UiFont}" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.rtt}" Binding="{Binding RountTime}" IsReadOnly="True" Width="90" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.switchport}" Binding="{Binding SwitchPort}" IsReadOnly="True" Width="150" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.note}" Binding="{Binding Description}" Width="240" FontFamily="{StaticResource UiFont}" />
-                <DataGridTextColumn Header="{helpers:Tr Key=col.created}" Binding="{Binding CommitDate}" IsReadOnly="True" Width="160" />
-                <!-- 위험 점수(0은 빈칸)와 자산 승인 표시. 저장된 컬럼 너비(인덱스 기준)와 호환되도록 맨 뒤에 둔다. -->
-                <DataGridTemplateColumn Header="{helpers:Tr Key=col.risk}" Width="70" SortMemberPath="RiskScore">
+                <DataGridTextColumn Tag="ip" Header="{helpers:Tr Key=col.ip}" Binding="{Binding Ip}" IsReadOnly="True" Width="156" />
+                <DataGridTextColumn Tag="name" Header="{helpers:Tr Key=col.name}" Binding="{Binding SystemName}" Width="170" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Tag="type" Header="{helpers:Tr Key=col.type}" Binding="{Binding DeviceType}" IsReadOnly="True" Width="120" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Tag="os" Header="{helpers:Tr Key=col.os}" Binding="{Binding OsGuess}" IsReadOnly="True" Width="110" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Tag="model" Header="{helpers:Tr Key=col.model}" Binding="{Binding Model}" IsReadOnly="True" Width="150" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Tag="osversion" Header="{helpers:Tr Key=col.osversion}" Binding="{Binding OsVersion}" IsReadOnly="True" Width="170" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Tag="ports" Header="{helpers:Tr Key=col.ports}" Binding="{Binding Ports}" Width="150" />
+                <DataGridTextColumn Tag="service" Header="{helpers:Tr Key=col.service}" Binding="{Binding Service}" IsReadOnly="True" Width="190" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Tag="mac" Header="{helpers:Tr Key=col.mac}" Binding="{Binding Macaddr}" Width="180" />
+                <DataGridTextColumn Tag="vendor" Header="{helpers:Tr Key=col.vendor}" Binding="{Binding Vendor}" Width="150" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Tag="rtt" Header="{helpers:Tr Key=col.rtt}" Binding="{Binding RountTime}" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Tag="switchport" Header="{helpers:Tr Key=col.switchport}" Binding="{Binding SwitchPort}" IsReadOnly="True" Width="150" />
+                <DataGridTextColumn Tag="note" Header="{helpers:Tr Key=col.note}" Binding="{Binding Description}" Width="240" FontFamily="{StaticResource UiFont}" />
+                <DataGridTextColumn Tag="added" Header="{helpers:Tr Key=col.created}" Binding="{Binding CommitDate}" IsReadOnly="True" Width="160" />
+                <!-- 위험 점수(0은 빈칸)와 자산 승인 표시. -->
+                <DataGridTemplateColumn Tag="risk" Header="{helpers:Tr Key=col.risk}" Width="70" SortMemberPath="RiskScore">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding RiskScore, Converter={StaticResource RiskScore}}" Classes="mono" TextAlignment="Right"
@@ -184,7 +189,7 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="{helpers:Tr Key=col.approved}" Width="70" SortMemberPath="Approved">
+                <DataGridTemplateColumn Tag="approved" Header="{helpers:Tr Key=col.approved}" Width="70" SortMemberPath="Approved">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Approved, Converter={StaticResource BoolCheck}}" TextAlignment="Center" VerticalAlignment="Center"
@@ -195,19 +200,9 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- 하단 상태줄: 마지막 메시지 한 줄 + 범례 -->
+        <!-- 하단 상태줄: 마지막 엔진 메시지 한 줄(범례는 위의 요약 타일이 대신한다). -->
         <Border Grid.Row="5" Classes="statusbar">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" Name="TbStatusLine" Classes="caption" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <Ellipse Width="8" Height="8" Fill="{StaticResource UpBrush}" />
-                    <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.up}" Margin="0,0,10,0" />
-                    <Path Data="M 5,0 L 10,9 L 0,9 Z" Fill="{StaticResource RiskBrush}" VerticalAlignment="Center" />
-                    <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.warn}" Margin="0,0,10,0" />
-                    <Ellipse Width="8" Height="8" Stroke="{StaticResource MutedBrush}" StrokeThickness="2" />
-                    <TextBlock Classes="caption" Text="{helpers:Tr Key=legend.down}" />
-                </StackPanel>
-            </Grid>
+            <TextBlock Name="TbStatusLine" Classes="caption" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </Border>
     </Grid>
 </UserControl>

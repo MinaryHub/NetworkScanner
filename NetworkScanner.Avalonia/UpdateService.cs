@@ -33,16 +33,16 @@ public sealed class UpdateService
 
     public UpdateState State { get; private set; } = UpdateState.Idle;
     public string? AvailableVersion => _pending?.TargetFullRelease.Version.ToString();
-    public bool IsInstalled => _manager.IsInstalled;
+    // 마지막으로 피드를 확인한 시각(주기 확인의 기준). 한 번도 확인하지 않았으면 MinValue.
     public DateTime LastCheck { get; private set; } = DateTime.MinValue;
 
     // 상태가 바뀔 때마다(확인/다운로드 진행/완료/실패) 호출. UI 스레드가 아닐 수 있다.
     public event Action<UpdateState, int>? StateChanged;
 
-    public UpdateService(bool includePrerelease = false)
+    // beta 채널 여부는 설정을 읽은 뒤 SetPrerelease로 넘긴다.
+    public UpdateService()
     {
-        _prerelease = includePrerelease;
-        _manager = Create(includePrerelease);
+        _manager = Create(_prerelease);
     }
 
     private static UpdateManager Create(bool prerelease)
@@ -114,20 +114,6 @@ public sealed class UpdateService
     public void ApplyAndRestart()
     {
         if (_pending == null || State != UpdateState.Ready) throw new InvalidOperationException("다운로드된 업데이트가 없습니다.");
-        _manager.ApplyUpdatesAndRestart(_pending);
-    }
-
-    // 이전 버전과의 호환: 확인된 업데이트를 내려받고 바로 재시작.
-    public async Task DownloadAndApplyAsync(Action<int>? progress = null)
-    {
-        if (_pending == null) throw new InvalidOperationException("확인된 업데이트가 없습니다.");
-        if (State != UpdateState.Ready)
-        {
-            void Relay(UpdateState s, int p) { if (s == UpdateState.Downloading) progress?.Invoke(p); }
-            StateChanged += Relay;
-            try { await DownloadAsync(false).ConfigureAwait(false); }
-            finally { StateChanged -= Relay; }
-        }
         _manager.ApplyUpdatesAndRestart(_pending);
     }
 

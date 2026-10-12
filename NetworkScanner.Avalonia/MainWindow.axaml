@@ -7,12 +7,7 @@
         x:Class="NetworkScanner.Avalonia.MainWindow"
         Icon="avares://NetworkScanner.Avalonia/Assets/app.ico"
         Title="Network Scanner" Width="1360" Height="820" MinWidth="960" MinHeight="600" Loaded="Window_Loaded">
-    <Window.Resources>
-        <!-- MainWindow.axaml.cs의 SetActiveNav가 쓰는 키. 값은 App.axaml의 테마 색과 같다. -->
-        <SolidColorBrush x:Key="SideBackgroundBrush" Color="Transparent" />
-        <SolidColorBrush x:Key="SideActiveBackgroundBrush" Color="#FF16243A" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#FF2DD4BF" />
-    </Window.Resources>
+    <!-- 사이드바 활성 표시 색(SetActiveNav)은 App.axaml의 TealLightBrush/NavyRaisedBrush를 그대로 쓴다. -->
     <Grid ColumnDefinitions="220,*">
         <!-- 사이드바: 화면 전환만 담당한다. -->
         <Border Grid.Column="0" Background="{StaticResource NavyBrush}">
@@ -31,7 +26,7 @@
                     </Button>
                     <Button Name="BtnHistory" Classes="nav" Click="BtnHistory_Click">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <Image Source="avares://NetworkScanner.Avalonia/Assets/open-file.png" Width="18" Height="18" />
+                            <Image Source="avares://NetworkScanner.Avalonia/Assets/save-file.png" Width="18" Height="18" />
                             <TextBlock VerticalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}" Text="{l:Tr Key=nav.history}" />
                         </StackPanel>
                     </Button>

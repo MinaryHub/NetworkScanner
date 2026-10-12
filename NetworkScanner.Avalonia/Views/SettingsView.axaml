@@ -26,9 +26,9 @@
                     <TextBlock Classes="section" Text="{l:Tr Key=settings.iprange}" />
                     <DataGrid Name="DgIPRange" Height="200" AutoGenerateColumns="False" CanUserResizeColumns="True">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="{l:Tr Key=settings.startip}" Binding="{Binding StartIP}" Width="150" />
-                            <DataGridTextColumn Header="{l:Tr Key=settings.endip}" Binding="{Binding EndIP}" Width="150" />
-                            <DataGridTextColumn Header="{l:Tr Key=col.note}" Binding="{Binding Description}" Width="*" />
+                            <DataGridTextColumn Tag="start" Header="{l:Tr Key=settings.startip}" Binding="{Binding StartIP}" Width="150" />
+                            <DataGridTextColumn Tag="end" Header="{l:Tr Key=settings.endip}" Binding="{Binding EndIP}" Width="150" />
+                            <DataGridTextColumn Tag="note" Header="{l:Tr Key=col.note}" Binding="{Binding Description}" Width="*" />
                         </DataGrid.Columns>
                     </DataGrid>
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -44,6 +44,7 @@
                 </StackPanel>
             </Border>
 
+            <!-- 포트 검색과 그에 딸린 취약점 평가(열린 포트가 있어야 규칙을 적용할 수 있다). -->
             <Border Classes="card">
                 <StackPanel Spacing="8">
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -55,6 +56,10 @@
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock VerticalAlignment="Center" Text="{l:Tr Key=settings.riskallow}" />
                         <TextBox Name="TbRiskAllow" Width="520" Watermark="{l:Tr Key=settings.riskallow.hint}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <CheckBox Name="ChkVuln" Content="{l:Tr Key=settings.vuln}" />
+                        <TextBlock Classes="caption" VerticalAlignment="Center" Text="{l:Tr Key=settings.vuln.hint}" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -160,11 +165,13 @@
                 </WrapPanel>
             </Border>
 
+            <!-- 일반: 시스템 이름은 저장 파일/리포트 이름의 접두어이며 업로드 시 필수다. -->
             <Border Classes="card">
                 <WrapPanel>
                     <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.general}" />
                     <TextBlock Width="90" VerticalAlignment="Center" Text="{l:Tr Key=settings.systemname}" />
-                    <TextBox Name="TbCurSystemName" Width="200" Margin="0,0,16,0" />
+                    <TextBox Name="TbCurSystemName" Width="200" Margin="0,0,6,0" />
+                    <TextBlock Classes="caption" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.systemname.hint}" />
                     <CheckBox Name="ChkLoadLatestFileWhenStartup" Content="{l:Tr Key=settings.loadlatest}" Margin="0,0,24,0" />
                     <CheckBox Name="ChkContinuousMonitoring" Content="{l:Tr Key=settings.continuous}" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <TextBox Name="TbMonitorInterval" Width="50" Text="10" VerticalAlignment="Center" />
@@ -199,65 +206,60 @@
                 </StackPanel>
             </Border>
 
-            <!-- 장비 식별 프로브와 취약점 평가. -->
-            <Border Classes="card">
-                <WrapPanel>
-                    <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.identity}" />
-                    <CheckBox Name="ChkSnmp" Content="{l:Tr Key=settings.snmp}" Margin="0,0,6,0" />
-                    <TextBox Name="TbSnmpCommunity" Width="120" Watermark="public" Classes="mono" Margin="0,0,16,0" />
-                    <CheckBox Name="ChkMdns" Content="{l:Tr Key=settings.mdns}" Margin="0,0,16,0" />
-                    <CheckBox Name="ChkNetBios" Content="{l:Tr Key=settings.netbios}" Margin="0,0,16,0" />
-                    <CheckBox Name="ChkVuln" Content="{l:Tr Key=settings.vuln}" />
-                </WrapPanel>
-            </Border>
-
-            <!-- 심층 발견: 멀티캐스트 브라우징, 핑거프린트 프로브, 라우터/OS 테이블, 패시브 캡처. -->
+            <!-- 심층 발견: 이름 프로브(NetBIOS/mDNS/SNMP), 핑거프린트(SMB/SSH/HTTP/UDP), 네트워크 전체(멀티캐스트/테이블/패시브).
+                 이름 프로브는 저장 즉시 반영되지만, 나머지는 시작 시 한 번 만들어지므로 재시작 후 적용된다. -->
             <Border Classes="card">
                 <StackPanel Spacing="8">
+                    <TextBlock Classes="section" Text="{l:Tr Key=settings.discovery}" />
                     <WrapPanel>
-                        <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.discovery}" />
-                        <CheckBox Name="ChkDiscSsdp" Content="{l:Tr Key=settings.discovery.ssdp}" Margin="0,0,12,0" />
-                        <CheckBox Name="ChkDiscMdns" Content="{l:Tr Key=settings.discovery.mdns}" Margin="0,0,12,0" />
+                        <TextBlock Width="110" VerticalAlignment="Center" Text="{l:Tr Key=settings.discovery.names}" />
+                        <CheckBox Name="ChkNetBios" Content="{l:Tr Key=settings.netbios}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkMdns" Content="{l:Tr Key=settings.mdns}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkSnmp" Content="{l:Tr Key=settings.snmp}" Margin="0,0,12,0" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Text="{l:Tr Key=settings.snmp.community}" />
+                        <TextBox Name="TbSnmpCommunity" Width="120" Watermark="public" Classes="mono" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Width="110" VerticalAlignment="Center" Text="{l:Tr Key=settings.discovery.fingerprints}" />
                         <CheckBox Name="ChkDiscSmb" Content="{l:Tr Key=settings.discovery.smb}" Margin="0,0,12,0" />
                         <CheckBox Name="ChkDiscSsh" Content="{l:Tr Key=settings.discovery.ssh}" Margin="0,0,12,0" />
                         <CheckBox Name="ChkDiscHttp" Content="{l:Tr Key=settings.discovery.http}" Margin="0,0,12,0" />
-                        <CheckBox Name="ChkDiscUdp" Content="{l:Tr Key=settings.discovery.udp}" Margin="0,0,12,0" />
-                        <CheckBox Name="ChkDiscNeighbor" Content="{l:Tr Key=settings.discovery.neighbor}" Margin="0,0,12,0" />
-                        <CheckBox Name="ChkDiscMergeHistory" Content="{l:Tr Key=settings.discovery.mergehistory}" />
+                        <CheckBox Name="ChkDiscUdp" Content="{l:Tr Key=settings.discovery.udp}" />
                     </WrapPanel>
                     <WrapPanel>
+                        <TextBlock Width="110" VerticalAlignment="Center" Text="{l:Tr Key=settings.discovery.network}" />
+                        <CheckBox Name="ChkDiscSsdp" Content="{l:Tr Key=settings.discovery.ssdp}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscMdns" Content="{l:Tr Key=settings.discovery.mdns}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscNeighbor" Content="{l:Tr Key=settings.discovery.neighbor}" Margin="0,0,12,0" />
                         <CheckBox Name="ChkDiscGatewaySnmp" Content="{l:Tr Key=settings.discovery.gatewaysnmp}" Margin="0,0,12,0" />
                         <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Text="{l:Tr Key=settings.discovery.snmpagents}" />
-                        <TextBox Name="TbDiscSnmpAgents" Width="320" Classes="mono" Watermark="10.0.0.1; 10.0.0.2:community" Margin="0,0,16,0" />
+                        <TextBox Name="TbDiscSnmpAgents" Width="320" Classes="mono" Watermark="10.0.0.1; 10.0.0.2:community" Margin="0,0,12,0" />
                         <CheckBox Name="ChkDiscActiveArp" Content="{l:Tr Key=settings.discovery.activearp}" Margin="0,0,12,0" />
-                        <CheckBox Name="ChkDiscPassive" Content="{l:Tr Key=settings.discovery.passive}" />
+                        <CheckBox Name="ChkDiscPassive" Content="{l:Tr Key=settings.discovery.passive}" Margin="0,0,12,0" />
+                        <CheckBox Name="ChkDiscMergeHistory" Content="{l:Tr Key=settings.discovery.mergehistory}" />
                     </WrapPanel>
+                    <TextBlock Name="TbDiscoveryRestart" Classes="caption" IsVisible="False" Text="{l:Tr Key=settings.discovery.restart}" />
                 </StackPanel>
             </Border>
 
-            <!-- 이력 보존/백업과 수동 백업·복원. 복원은 다음 시작 시 적용된다(엔진이 DB를 열기 전). -->
+            <!-- 백업·지원: 이력 보존/백업 개수, 수동 백업·복원(복원은 다음 시작 시 적용), 설정 내보내기/가져오기, 진단 번들. -->
             <Border Classes="card">
-                <WrapPanel>
-                    <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.history}" />
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.retention}" />
-                    <TextBox Name="TbRetention" Width="70" Classes="mono" Margin="0,0,16,0" />
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.backups}" />
-                    <TextBox Name="TbBackups" Width="60" Classes="mono" Margin="0,0,16,0" />
-                    <Button Name="BtnBackupNow" Click="BtnBackupNow_Click" Content="{l:Tr Key=history.backup}" Margin="0,0,8,0" />
-                    <Button Name="BtnRestore" Click="BtnRestore_Click" Content="{l:Tr Key=history.restore}" />
-                </WrapPanel>
-            </Border>
-
-            <!-- 스캔 프로필, 설정 내보내기/가져오기, 진단 번들. -->
-            <Border Classes="card">
-                <WrapPanel>
-                    <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.maintenancebox}" />
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.profile}" />
-                    <ComboBox Name="CmbProfile" Width="150" Margin="0,0,16,0" />
-                    <Button Name="BtnExport" Click="BtnExport_Click" Content="{l:Tr Key=settings.export}" Margin="0,0,8,0" />
-                    <Button Name="BtnImport" Click="BtnImport_Click" Content="{l:Tr Key=settings.import}" Margin="0,0,8,0" />
-                    <Button Name="BtnDiag" Classes="accentoutline" Click="BtnDiag_Click" Content="{l:Tr Key=settings.diag}" />
-                </WrapPanel>
+                <StackPanel Spacing="8">
+                    <WrapPanel>
+                        <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.backupbox}" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.retention}" />
+                        <TextBox Name="TbRetention" Width="70" Classes="mono" Margin="0,0,16,0" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.backups}" />
+                        <TextBox Name="TbBackups" Width="60" Classes="mono" Margin="0,0,16,0" />
+                        <Button Name="BtnBackupNow" Click="BtnBackupNow_Click" Content="{l:Tr Key=history.backup}" Margin="0,0,8,0" />
+                        <Button Name="BtnRestore" Click="BtnRestore_Click" Content="{l:Tr Key=history.restore}" />
+                    </WrapPanel>
+                    <WrapPanel>
+                        <Button Name="BtnExport" Click="BtnExport_Click" Content="{l:Tr Key=settings.export}" Margin="0,0,8,0" />
+                        <Button Name="BtnImport" Click="BtnImport_Click" Content="{l:Tr Key=settings.import}" Margin="0,0,8,0" />
+                        <Button Name="BtnDiag" Classes="accentoutline" Click="BtnDiag_Click" Content="{l:Tr Key=settings.diag}" />
+                    </WrapPanel>
+                </StackPanel>
             </Border>
 
             <!-- 자동 업데이트: 확인 주기, 백그라운드 다운로드, 종료 시 자동 설치, beta 채널. -->
@@ -265,7 +267,7 @@
                 <StackPanel Spacing="8">
                     <WrapPanel>
                         <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.update}" />
-                        <CheckBox Name="ChkUpdateAutoCheck" Content="{l:Tr Key=settings.update.autocheck}" Margin="0,0,16,0" />
+                        <CheckBox Name="ChkUpdateAutoCheck" Content="{l:Tr Key=settings.update.autocheck}" Margin="0,0,16,0" IsCheckedChanged="ChkUpdateAutoCheck_Changed" />
                         <CheckBox Name="ChkUpdateAutoDownload" Content="{l:Tr Key=settings.update.autodownload}" Margin="0,0,16,0" />
                         <CheckBox Name="ChkUpdateAutoApply" Content="{l:Tr Key=settings.update.autoapply}" Margin="0,0,16,0" />
                         <CheckBox Name="ChkUpdatePrerelease" Content="{l:Tr Key=settings.update.prerelease}" Margin="0,0,16,0" />

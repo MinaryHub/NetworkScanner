@@ -12,7 +12,7 @@
                     <Image Source="avares://NetworkScanner.Avalonia/Assets/info.png" Width="24" Height="24" />
                     <TextBlock Classes="h1" VerticalAlignment="Center" Text="{l:Tr Key=guide.title}" />
                 </StackPanel>
-                <!-- 설명서 언어는 앱 UI 언어(en/ko)와 별개로 즉시 전환된다(영어 기본, 한/일/중 지원). -->
+                <!-- 설명서 언어(영어/한국어)는 앱 UI 언어 설정과 별개로 즉시 전환된다. -->
                 <ComboBox Grid.Column="2" Name="CbLanguage" Width="150" VerticalAlignment="Center"
                           SelectionChanged="CbLanguage_SelectionChanged" />
             </Grid>

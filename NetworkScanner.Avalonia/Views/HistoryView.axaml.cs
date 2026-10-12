@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using NetworkScanner.Avalonia.Helpers;
@@ -16,7 +14,9 @@ namespace NetworkScanner.Avalonia.Views
     /// </summary>
     public partial class HistoryView : UserControl
     {
-        private const int PruneDays = 90;
+        // 보존 일수 설정이 0(무제한)이면 수동 정리는 이 기준을 쓴다.
+        private const int DefaultPruneDays = 90;
+        private int _pruneDays = DefaultPruneDays;
         private ScanHistoryStore? _history;
 
         // 알림 상태를 바꿨을 때(사이드바의 열린 알림 수를 MainWindow가 다시 세도록).
@@ -25,6 +25,7 @@ namespace NetworkScanner.Avalonia.Views
         public HistoryView()
         {
             InitializeComponent();
+            SetRetentionDays(DefaultPruneDays);
         }
 
         // MainWindow가 엔진과 같은 ScanServices.History를 넘겨준다. null이면 이력 DB를 열지 못한 것.
@@ -34,8 +35,14 @@ namespace NetworkScanner.Avalonia.Views
             bool available = history != null;
             BtnRefresh.IsEnabled = available;
             BtnPrune.IsEnabled = available;
-            BtnBackup.IsEnabled = available;
             if (!available) TbMsg.Text = Localization.T("history.unavailable");
+        }
+
+        // '정리' 버튼의 기준 일수 = 설정의 이력 보존 일수(시작 시와 설정 저장 시 MainWindow가 넘겨준다).
+        public void SetRetentionDays(int retentionDays)
+        {
+            _pruneDays = retentionDays > 0 ? retentionDays : DefaultPruneDays;
+            BtnPrune.Content = string.Format(Localization.T("history.prune"), _pruneDays);
         }
 
         public void Refresh()
@@ -80,12 +87,14 @@ namespace NetworkScanner.Avalonia.Views
             if (_history == null) return;
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
 
-            bool confirmed = await SimpleDialogs.ShowConfirmAsync(owner, Localization.T("history.prune.confirm"), Localization.T("history.prune"));
+            bool confirmed = await SimpleDialogs.ShowConfirmAsync(owner,
+                string.Format(Localization.T("history.prune.confirm"), _pruneDays),
+                string.Format(Localization.T("history.prune"), _pruneDays));
             if (!confirmed) return;
 
             try
             {
-                int removed = _history.Prune(DateTimeOffset.Now.AddDays(-PruneDays));
+                int removed = _history.Prune(DateTimeOffset.Now.AddDays(-_pruneDays));
                 Refresh();
                 TbMsg.Text = string.Format(Localization.T("history.pruned"), removed);
             }
@@ -93,25 +102,6 @@ namespace NetworkScanner.Avalonia.Views
             {
                 AppLogger.LogError("NetworkScanner", "history prune failed", ex);
                 TbMsg.Text = string.Format(Localization.T("history.loadfailed"), ex.Message);
-            }
-        }
-
-        // 열려 있는 DB를 VACUUM INTO로 일관되게 복사한다(backups/history-날짜.db).
-        private async void BtnBackup_Click(object? sender, RoutedEventArgs e)
-        {
-            if (_history == null) return;
-            try
-            {
-                Directory.CreateDirectory(HistoryMaintenance.BackupDirectory);
-                string path = Path.Combine(HistoryMaintenance.BackupDirectory, $"history-{DateTime.Now:yyyyMMdd-HHmmss}.db");
-                ScanHistoryStore history = _history;
-                await Task.Run(() => history.BackupTo(path));
-                TbMsg.Text = string.Format(Localization.T("msg.history.backup.saved"), path);
-            }
-            catch (Exception ex)
-            {
-                AppLogger.LogError("NetworkScanner", "history backup failed", ex);
-                TbMsg.Text = string.Format(Localization.T("msg.history.backup.failed"), ex.Message);
             }
         }
 
@@ -255,7 +245,7 @@ namespace NetworkScanner.Avalonia.Views
                 Total = s.Total,
                 Alive = s.Alive,
                 Prohibited = s.Prohibited,
-                Scheduled = s.Scheduled ? "O" : "",
+                Scheduled = s.Scheduled ? "✓" : "",
             };
         }
 
@@ -274,6 +264,8 @@ namespace NetworkScanner.Avalonia.Views
             public string LastName { get; init; } = "";
             public string LastMac { get; init; } = "";
             public string LastVendor { get; init; } = "";
+            public string LastModel { get; init; } = "";
+            public string LastOs { get; init; } = "";
             public string LastPorts { get; init; } = "";
             public int SeenCount { get; init; }
 
@@ -292,6 +284,8 @@ namespace NetworkScanner.Avalonia.Views
                 LastName = h.LastName,
                 LastMac = h.LastMac,
                 LastVendor = h.LastVendor,
+                LastModel = h.LastModel,
+                LastOs = h.LastOs,
                 LastPorts = h.LastPorts,
                 SeenCount = h.SeenCount,
             };

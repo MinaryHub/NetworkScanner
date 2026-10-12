@@ -9,9 +9,6 @@ namespace NetworkScanner.Avalonia.Helpers
     {
         public string Key { get; set; } = "";
 
-        public TrExtension() { }
-        public TrExtension(string key) { Key = key; }
-
         public override object ProvideValue(IServiceProvider serviceProvider) => Localization.T(Key);
     }
 }
