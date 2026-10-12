@@ -10,7 +10,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- 개발 머신에 .NET 10 런타임이 없어도(더 새 버전만 설치된 경우) 로컬 실행이 가능하도록 허용. -->
     <RollForward>LatestMajor</RollForward>
-    <Version>1.7.5</Version>
+    <Version>2.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

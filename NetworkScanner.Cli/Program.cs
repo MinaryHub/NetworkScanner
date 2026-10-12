@@ -11,6 +11,12 @@ using NetworkScanner.Notifications;
 
 Console.OutputEncoding = Encoding.UTF8;
 
+// Windows 업데이트 도우미 모드(부모 종료 후 파일 교체).
+if (args.Length > 0 && args[0] == "--apply-update")
+{
+    return NetworkScanner.Updates.HeadlessUpdater.RunApplyHelper(args[1..]);
+}
+
 var options = CliOptions.Parse(args);
 if (options.ShowHelp)
 {
@@ -42,6 +48,7 @@ switch (options.Command)
     case CliCommand.Alerts: return RunAlerts(options);
     case CliCommand.Settings: return RunSettings(options);
     case CliCommand.Diag: return RunDiag(options);
+    case CliCommand.Update: return await RunUpdateAsync(options);
 }
 
 // 스캔 대역 결정: --range → settings.json → 로컬 서브넷 자동 감지 순.
@@ -326,6 +333,42 @@ static int RunSettings(CliOptions o)
     catch (Exception ex) { Console.Error.WriteLine("error: " + ex.Message); return 1; }
     Console.Error.WriteLine("error: settings export <file> | import <file>");
     return 2;
+}
+
+// netscan update [check|apply] — 현재 RID용 압축본을 받아 SHA256SUMS.txt로 검증한 뒤 설치 폴더에 적용한다.
+static async Task<int> RunUpdateAsync(CliOptions o)
+{
+    var updater = new NetworkScanner.Updates.HeadlessUpdater();
+    var current = NetworkScanner.Updates.GitHubReleases.CurrentVersion();
+    try
+    {
+        var found = await updater.CheckAsync(current, o.Beta, CancellationToken.None);
+        if (found == null) { Console.Error.WriteLine($"info: up to date (v{current.ToString(3)})"); return 0; }
+        Console.Error.WriteLine($"info: v{found.Version.ToString(3)} available ({found.Archive.Name}, {found.Archive.Size / 1024 / 1024} MB){(found.ExpectedSha256 == null ? " - no checksum published" : "")}");
+        if (o.Sub == "check") return 10;
+        if (!o.Yes)
+        {
+            Console.Error.Write("apply update now? [y/N] ");
+            string? answer = Console.ReadLine();
+            if (!string.Equals(answer?.Trim(), "y", StringComparison.OrdinalIgnoreCase)) return 1;
+        }
+        string stage = await updater.DownloadAndStageAsync(found, requireChecksum: true,
+            p => { if (!Console.IsErrorRedirected) Console.Error.Write($"\rdownloading {p}%   "); }, CancellationToken.None);
+        Console.Error.WriteLine();
+        string install = NetworkScanner.Updates.HeadlessUpdater.InstallDirectory;
+        if (OperatingSystem.IsWindows())
+        {
+            NetworkScanner.Updates.HeadlessUpdater.LaunchWindowsApplyHelper(stage, install, null);
+            Console.Error.WriteLine("info: update will be applied as soon as this process exits.");
+        }
+        else
+        {
+            int n = NetworkScanner.Updates.HeadlessUpdater.ApplyInPlace(stage, install);
+            Console.Error.WriteLine($"info: updated {n} file(s) in {install}; new version takes effect on the next run.");
+        }
+        return 0;
+    }
+    catch (Exception ex) { Console.Error.WriteLine("error: " + ex.Message); return 1; }
 }
 
 static int RunDiag(CliOptions o)

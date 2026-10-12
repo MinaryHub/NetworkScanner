@@ -71,6 +71,9 @@ namespace NetworkScanner
         // 스캔 프로필("quick"/"standard"/"thorough").
         public string ScanProfile { get; set; } = "standard";
 
+        // 자동 업데이트(GUI는 Velopack, CLI/서비스는 GitHub 릴리스 압축본).
+        public UpdateSettings Update { get; set; } = new UpdateSettings();
+
         // 이력 보존 일수(0 = 무제한)와 자동 백업 보관 개수.
         public int HistoryRetentionDays { get; set; } = 180;
         public int HistoryBackupsToKeep { get; set; } = 3;
@@ -105,6 +108,7 @@ namespace NetworkScanner
             if (Alerts.RenotifyAfterHours < 0 || Alerts.RenotifyAfterHours > 720)
                 errors.Add(Localization.T("settings.invalid.renotify"));
             if (HistoryRetentionDays < 0) errors.Add(Localization.T("settings.invalid.retention"));
+            if (Update.CheckIntervalHours < 1 || Update.CheckIntervalHours > 168) errors.Add(Localization.T("settings.invalid.updateinterval"));
 
             var (_, invalidAllow) = RiskPolicy.ParseAllowList(RiskAllowList);
             if (invalidAllow.Count > 0)
@@ -135,6 +139,15 @@ namespace NetworkScanner
             if (IPAddress.TryParse(host, out _)) return true;
             return Uri.CheckHostName(host) is UriHostNameType.Dns;
         }
+    }
+
+    public sealed class UpdateSettings
+    {
+        public bool AutoCheck { get; set; } = true;            // 시작 시 + 주기적으로 새 버전 확인
+        public bool AutoDownload { get; set; } = true;         // 찾으면 백그라운드로 내려받기
+        public bool AutoApply { get; set; }                    // GUI: 앱 종료 시 자동 설치 / 서비스: 즉시 설치 후 재시작
+        public bool IncludePrerelease { get; set; }            // beta 채널(사전 릴리스) 포함
+        public int CheckIntervalHours { get; set; } = 6;
     }
 
     public sealed class AssetPolicySettings

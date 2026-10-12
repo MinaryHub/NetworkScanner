@@ -6,6 +6,12 @@ using NetworkScanner.Service;
 //   netscan-service                 포그라운드 실행(Ctrl+C로 종료)
 //   netscan-service --run-once      예약과 무관하게 지금 한 번 스캔하고 종료(cron/launchd 간격 실행용)
 
+// "--apply-update <stage> <install> <pid> [service]": Windows 업데이트 도우미 모드(부모 종료 후 파일 교체).
+if (args.Length > 0 && args[0] == "--apply-update")
+{
+    return NetworkScanner.Updates.HeadlessUpdater.RunApplyHelper(args[1..]);
+}
+
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(o => o.ServiceName = "NetworkScanner");
 builder.Services.AddSystemd();
@@ -16,3 +22,4 @@ builder.Logging.AddConsole();
 
 IHost host = builder.Build();
 await host.RunAsync();
+return Environment.ExitCode;

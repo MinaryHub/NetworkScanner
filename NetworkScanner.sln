@@ -13,6 +13,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetworkScanner.Cli", "Netwo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetworkScanner.Service", "NetworkScanner.Service\NetworkScanner.Service.csproj", "{177E2507-AD86-4D2F-A530-514C6F20E8B7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetworkScanner.Collector", "NetworkScanner.Collector\NetworkScanner.Collector.csproj", "{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetworkScanner.Collector.Tests", "NetworkScanner.Collector.Tests\NetworkScanner.Collector.Tests.csproj", "{503FC4EF-9107-41B5-8C69-A883EEA5B348}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +87,30 @@ Global
 		{177E2507-AD86-4D2F-A530-514C6F20E8B7}.Release|x64.Build.0 = Release|Any CPU
 		{177E2507-AD86-4D2F-A530-514C6F20E8B7}.Release|x86.ActiveCfg = Release|Any CPU
 		{177E2507-AD86-4D2F-A530-514C6F20E8B7}.Release|x86.Build.0 = Release|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Debug|x64.Build.0 = Debug|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Debug|x86.Build.0 = Debug|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Release|x64.ActiveCfg = Release|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Release|x64.Build.0 = Release|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Release|x86.ActiveCfg = Release|Any CPU
+		{D3FB5B8B-2A41-48FF-82D4-266B5693BA8B}.Release|x86.Build.0 = Release|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Debug|x64.Build.0 = Debug|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Debug|x86.Build.0 = Debug|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Release|Any CPU.Build.0 = Release|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Release|x64.ActiveCfg = Release|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Release|x64.Build.0 = Release|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Release|x86.ActiveCfg = Release|Any CPU
+		{503FC4EF-9107-41B5-8C69-A883EEA5B348}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

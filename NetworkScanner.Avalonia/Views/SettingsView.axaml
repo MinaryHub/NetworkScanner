@@ -236,6 +236,23 @@
                 </WrapPanel>
             </Border>
 
+            <!-- 자동 업데이트: 확인 주기, 백그라운드 다운로드, 종료 시 자동 설치, beta 채널. -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <WrapPanel>
+                        <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.update}" />
+                        <CheckBox Name="ChkUpdateAutoCheck" Content="{l:Tr Key=settings.update.autocheck}" Margin="0,0,16,0" />
+                        <CheckBox Name="ChkUpdateAutoDownload" Content="{l:Tr Key=settings.update.autodownload}" Margin="0,0,16,0" />
+                        <CheckBox Name="ChkUpdateAutoApply" Content="{l:Tr Key=settings.update.autoapply}" Margin="0,0,16,0" />
+                        <CheckBox Name="ChkUpdatePrerelease" Content="{l:Tr Key=settings.update.prerelease}" Margin="0,0,16,0" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.update.interval}" />
+                        <TextBox Name="TbUpdateInterval" Width="60" Classes="mono" Margin="0,0,16,0" />
+                        <Button Name="BtnUpdateCheck" Classes="accentoutline" Click="BtnUpdateCheck_Click" Content="{l:Tr Key=settings.update.checknow}" />
+                    </WrapPanel>
+                    <TextBlock Name="TbUpdateStatus" Classes="caption" />
+                </StackPanel>
+            </Border>
+
             <Border Classes="card">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Classes="section" VerticalAlignment="Center" Text="{l:Tr Key=settings.language}" />

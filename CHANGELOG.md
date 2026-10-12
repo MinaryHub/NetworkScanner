@@ -9,6 +9,8 @@
 - **Vulnerability & weak-configuration assessment** (offline rule set `data/vulnrules.json`: vulnerable service versions, exposed/legacy services, TLS certificate and protocol checks) with a per-host risk score and `HighRisk` alerts.
 - **PDF report** (A4, Korean-capable embedded font) next to HTML/JSON.
 - **Scan profiles** quick / standard / thorough (`--profile`), settings export/import, diagnostic support bundle (`netscan diag`), history retention and daily rotating backups with restore.
+- **Central collector** (`netscan-collector`): multi-site upload endpoint with per-site tokens, stored reports, parsed scan summaries, JSON API and a dashboard; Docker image and compose-ready configuration.
+- **Automatic updates**: the GUI checks on a schedule (default every 6 h), downloads in the background and can install silently when the app closes (or on demand), with an optional beta (pre-release) channel; the CLI and service update themselves from GitHub Releases (`netscan update`, service `Update.AutoApply`) after verifying the archive against `SHA256SUMS.txt`, swapping files in place on Unix and via a helper process on Windows.
 
 ## Unreleased (2.0.0)
 

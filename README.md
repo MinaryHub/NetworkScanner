@@ -90,6 +90,7 @@ netscan history [scans|inventory|host <ip>|prune <days>]  query the local histor
 netscan assets [list|approve <ip…>|unapprove <ip…>|set <ip> --owner X --tags a,b] [--all]
 netscan alerts [list|ack <id>|snooze <id> [hours]|reopen <id>]
 netscan settings export|import <file>      netscan diag [zip]
+netscan update [check|apply] [--beta] [-y]  # exit 10 = update available (check)
 ```
 
 Progress goes to stderr, results to stdout (safe to pipe). Exit code 3 means the scan succeeded but risky ports were found.
@@ -110,6 +111,11 @@ docker run --rm --net=host --cap-add=NET_RAW ghcr.io/<owner>/netscan --range 10.
 - **Scan profiles**: *quick* (ping sweep only, 128 parallel), *standard* (your settings), *thorough* (top ~80 service ports added, identification + assessment on, slower timeouts). `--profile` on the CLI.
 - **Reports**: HTML, JSON and **PDF** (Korean-capable) from the GUI, `-o pdf --out file.pdf` on the CLI; scheduled scans save CSV + HTML + PDF.
 - **Operations**: settings export/import (no secrets inside), diagnostic bundle (`netscan diag` or Settings) for support, history retention (days) with daily rotating backups and restore.
+- **Automatic updates** (Settings → Updates): check every N hours, download in the background, install when the app closes or click *Restart now*; opt into pre-releases (beta). The headless binaries update themselves too: `netscan update` (or `netscan update check`), and `netscan-service` applies updates on its own when *Install automatically* is on — downloads are verified against the release's `SHA256SUMS.txt`, files are swapped in place on Linux/macOS (the service exits with code 75 so systemd/launchd restart it) and through a helper process on Windows (which restarts the service).
+
+## Central collector (`netscan-collector`)
+
+Several sites can report to one server: the collector (`NetworkScanner.Collector`, Docker image `ghcr.io/<owner>/netscan-collector`) accepts the scanners' HTTPS uploads (one Bearer token per site), stores CSV/HTML/PDF/JSON reports, parses the CSVs into per-scan summaries and host lists, and serves a dashboard (`/`, token login) plus a JSON API (`/api/sites`, `/api/sites/{site}/scans`, `/api/sites/{site}/scans/{id}/hosts`, `/api/uploads/{id}`). See [`deploy/README.md`](deploy/README.md#central-collector-netscan-collector) for configuration; put a TLS-terminating reverse proxy in front of it.
 
 ## Headless scheduler (`netscan-service`)
 

@@ -243,6 +243,30 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/netscan:${{ needs.version.outputs.value }}
             ghcr.io/${{ github.repository_owner }}/netscan:latest
 
+  docker-collector:
+    name: Docker image (collector)
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.collector
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/netscan-collector:${{ needs.version.outputs.value }}
+            ghcr.io/${{ github.repository_owner }}/netscan-collector:latest
+
   release:
     name: Create GitHub Release
     needs: [version, package, headless]
@@ -256,6 +280,8 @@ jobs:
         run: |
           mkdir -p release
           find artifacts -type f -exec cp {} release/ \;
+          # 헤드리스 자체 업데이트(netscan update / 서비스 자동 업데이트)가 다운로드를 검증하는 데 쓰는 해시 목록.
+          (cd release && sha256sum * > SHA256SUMS.txt)
           ls -la release
       - uses: softprops/action-gh-release@v2
         with:

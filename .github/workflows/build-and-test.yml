@@ -22,6 +22,9 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Test
         run: dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --configuration Release
+      - name: Test collector
+        if: runner.os == 'Linux'
+        run: dotnet test NetworkScanner.Collector.Tests/NetworkScanner.Collector.Tests.csproj --configuration Release
       # 알려진 취약점이 있는 패키지를 쓰면 실패시킨다.
       - name: Check vulnerable packages
         if: runner.os == 'Linux'
@@ -60,6 +63,12 @@ jobs:
           file: deploy/Dockerfile
           push: false
           tags: netscan:ci
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.collector
+          push: false
+          tags: netscan-collector:ci
 
   build-avalonia:
     name: Package (Velopack) Avalonia app

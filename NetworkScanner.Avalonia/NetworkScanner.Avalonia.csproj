@@ -11,7 +11,7 @@
          self-contained 배포판에는 영향 없음(자체 런타임 포함). -->
     <RollForward>LatestMajor</RollForward>
     <!-- 릴리즈 태그 push 시 release.yml이 -p:Version=으로 실제 태그 버전을 덮어써 반영한다. -->
-    <Version>1.7.5</Version>
+    <Version>2.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

@@ -77,6 +77,9 @@ public partial class MainWindow : Window, IScanConfigProvider
         Closing += (_, _) =>
         {
             AppSettingsStore.SaveColumnLayout(_ipListView.GetColumnWidths(), _settingsView.GetColumnWidths());
+            // 내려받아 둔 업데이트가 있고 자동 설치가 켜져 있으면 종료 직후 조용히 설치된다.
+            if (_updateService.State == UpdateState.Ready && _settingsView.GetCurrentSettings().Update.AutoApply)
+                _updateService.ScheduleApplyOnExit();
             AppLogger.LogInfo("NetworkScanner", "프로그램 종료");
         };
 
@@ -85,7 +88,7 @@ public partial class MainWindow : Window, IScanConfigProvider
             _ipListView.GetLatestFilePath(GetSystemName());
         }
 
-        _ = CheckForUpdatesAsync();
+        InitUpdates(startup);
         _ = FlushOutboxAsync();
         if (!startup.UsageNoticeAccepted) _ = ShowUsageNoticeAsync();
     }
@@ -202,34 +205,106 @@ public partial class MainWindow : Window, IScanConfigProvider
         TbOutbox.IsVisible = pending > 0;
     }
 
-    // GitHub Releases에서 새 버전을 확인하고, 있으면 사이드바의 업데이트 버튼을 노출한다.
+    // ---- 자동 업데이트 ----
+    // 설정(Update.*)에 따라 시작 시·주기적으로 확인하고, 백그라운드로 내려받고, 종료 시 자동 설치한다.
     // 설치본이 아닌 개발 실행(dotnet run)에서는 조용히 아무것도 하지 않는다.
-    private async System.Threading.Tasks.Task CheckForUpdatesAsync()
+    private DateTime _lastUpdateCheck = DateTime.MinValue;
+
+    private void InitUpdates(AppSettingsData settings)
     {
+        _updateService.SetPrerelease(settings.Update.IncludePrerelease);
+        _updateService.StateChanged += (state, progress) => Dispatcher.UIThread.Post(() => RenderUpdateState(state, progress));
+        _settingsView.UpdateCheckRequested += () => _ = CheckForUpdatesAsync(manual: true);
+        _settingsView.SettingsSaved += data => _updateService.SetPrerelease(data.Update.IncludePrerelease);
+        if (settings.Update.AutoCheck) _ = CheckForUpdatesAsync(manual: false);
+    }
+
+    private async System.Threading.Tasks.Task CheckForUpdatesAsync(bool manual)
+    {
+        AppSettingsData settings = _settingsView.GetCurrentSettings();
         try
         {
+            _lastUpdateCheck = DateTime.Now;
             string? newVersion = await _updateService.CheckAsync();
+            if (manual && _updateService.State == UpdateState.NotInstalled)
+                _settingsView.ShowUpdateStatus(Localization.T("update.notinstalled"));
+            else if (manual && newVersion == null)
+                _settingsView.ShowUpdateStatus(Localization.T("update.uptodate"));
             if (newVersion == null) return;
 
-            TbUpdate.Text = $"{Localization.T("update.button")} v{newVersion}";
-            ToolTip.SetTip(BtnUpdate, string.Format(Localization.T("update.available"), newVersion));
-            BtnUpdate.IsVisible = true;
+            if (settings.Update.AutoDownload)
+                await _updateService.DownloadAsync(settings.Update.AutoApply);
         }
         catch (Exception ex)
         {
             // 오프라인 등 확인 실패는 치명적이지 않다 - 로그만 남긴다.
-            AppLogger.LogInfo("NetworkScanner", "업데이트 확인 실패: " + ex.Message);
+            AppLogger.LogInfo("NetworkScanner", "업데이트 확인/다운로드 실패: " + ex.Message);
+            if (manual) _settingsView.ShowUpdateStatus(Localization.T("update.failed") + ": " + ex.Message);
         }
+    }
+
+    // 사이드바 버튼의 문구/표시를 상태에 맞춘다.
+    private void RenderUpdateState(UpdateState state, int progress)
+    {
+        string? v = _updateService.AvailableVersion;
+        bool autoApply = _settingsView.GetCurrentSettings().Update.AutoApply;
+        switch (state)
+        {
+            case UpdateState.Available:
+                TbUpdate.Text = $"{Localization.T("update.button")} v{v}";
+                ToolTip.SetTip(BtnUpdate, string.Format(Localization.T("update.available"), v));
+                BtnUpdate.IsVisible = true;
+                BtnUpdate.IsEnabled = true;
+                break;
+            case UpdateState.Downloading:
+                TbUpdate.Text = $"{Localization.T("update.downloading")} {progress}%";
+                BtnUpdate.IsVisible = true;
+                BtnUpdate.IsEnabled = false;
+                break;
+            case UpdateState.Ready:
+                TbUpdate.Text = Localization.T("update.restart") + $" v{v}";
+                ToolTip.SetTip(BtnUpdate, string.Format(Localization.T(autoApply ? "update.onexit" : "update.ready"), v));
+                BtnUpdate.IsVisible = true;
+                BtnUpdate.IsEnabled = true;
+                break;
+            case UpdateState.Failed:
+                TbUpdate.Text = Localization.T("update.failed");
+                BtnUpdate.IsVisible = true;
+                BtnUpdate.IsEnabled = true;
+                break;
+            default:
+                BtnUpdate.IsVisible = false;
+                break;
+        }
+        _settingsView.ShowUpdateStatus(state switch
+        {
+            UpdateState.Checking => Localization.T("update.checking"),
+            UpdateState.Available => string.Format(Localization.T("update.available"), v),
+            UpdateState.Downloading => $"{Localization.T("update.downloading")} {progress}%",
+            UpdateState.Ready => string.Format(Localization.T(autoApply ? "update.onexit" : "update.ready"), v),
+            UpdateState.UpToDate => Localization.T("update.uptodate"),
+            UpdateState.NotInstalled => Localization.T("update.notinstalled"),
+            UpdateState.Failed => Localization.T("update.failed"),
+            _ => "",
+        });
     }
 
     private async void BtnUpdate_Click(object? sender, RoutedEventArgs e)
     {
-        BtnUpdate.IsEnabled = false;
         try
         {
-            await _updateService.DownloadAndApplyAsync(percent =>
-                Dispatcher.UIThread.Post(() =>
-                    TbUpdate.Text = $"{Localization.T("update.downloading")} {percent}%"));
+            switch (_updateService.State)
+            {
+                case UpdateState.Ready:
+                    _updateService.ApplyAndRestart();
+                    break;
+                case UpdateState.Available:
+                case UpdateState.Failed:
+                    BtnUpdate.IsEnabled = false;
+                    if (_updateService.AvailableVersion == null) await _updateService.CheckAsync();
+                    if (_updateService.AvailableVersion != null) await _updateService.DownloadAsync(autoApplyOnExit: false);
+                    break;
+            }
         }
         catch (Exception ex)
         {
@@ -239,12 +314,22 @@ public partial class MainWindow : Window, IScanConfigProvider
         }
     }
 
+    // 1분 타이머에서 호출: 설정된 주기마다 자동 확인.
+    private void TickUpdateCheck(AppSettingsData settings, DateTime now)
+    {
+        if (!settings.Update.AutoCheck) return;
+        if ((now - _lastUpdateCheck).TotalHours < Math.Max(1, settings.Update.CheckIntervalHours)) return;
+        if (_updateService.State is UpdateState.Downloading or UpdateState.Ready or UpdateState.Checking) return;
+        _ = CheckForUpdatesAsync(manual: false);
+    }
+
     private DateTime _lastMonitorScan = DateTime.MinValue;
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
         AppSettingsData settings = _settingsView.GetCurrentSettings();
         DateTime now = DateTime.Now;
+        TickUpdateCheck(settings, now);
 
         // 연속 모니터링: 지정한 분 간격마다 자동 재스캔(스케줄링과 독립적으로 동작).
         if (settings.ContinuousMonitoring

@@ -1,0 +1,18 @@
+# 중앙 수집 서버 컨테이너. 리버스 프록시(TLS 종료) 뒤에 두고, 업로드 데이터는 /data 볼륨에 둔다.
+#   docker build -f deploy/Dockerfile.collector -t netscan-collector .
+#   docker run -d -p 8080:8080 -v netscan-collector:/data \
+#     -e COLLECTOR__DATADIR=/data -e COLLECTOR__TOKENS__0__TOKEN=<32+ chars> -e COLLECTOR__TOKENS__0__SITE=Office-3F \
+#     -e COLLECTOR__ADMINTOKEN=<32+ chars> netscan-collector
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY . .
+RUN dotnet publish NetworkScanner.Collector/NetworkScanner.Collector.csproj -c Release -o /out
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /out .
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080 COLLECTOR__DATADIR=/data
+VOLUME ["/data"]
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
+ENTRYPOINT ["dotnet", "netscan-collector.dll"]

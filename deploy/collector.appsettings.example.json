@@ -1,0 +1,12 @@
+{
+  "Collector": {
+    "DataDir": "/data",
+    "MaxUploadMb": 50,
+    "ScansPerSite": 200,
+    "AdminToken": "replace-with-a-long-random-admin-token",
+    "Tokens": [
+      { "Token": "replace-with-a-long-random-token-for-office-3f", "Site": "Office-3F" },
+      { "Token": "replace-with-a-long-random-token-for-plant-b", "Site": "Plant-B" }
+    ]
+  }
+}

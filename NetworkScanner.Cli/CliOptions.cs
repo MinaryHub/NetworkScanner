@@ -3,7 +3,7 @@ using NetworkScanner;
 namespace NetworkScanner.Cli;
 
 internal enum OutputFormat { Table, Json, Csv, Html, Pdf }
-internal enum CliCommand { Scan, History, Assets, Alerts, Settings, Diag }
+internal enum CliCommand { Scan, History, Assets, Alerts, Settings, Diag, Update }
 
 // 명령행 옵션 파서. 최소한의 GNU 스타일 --옵션만 다룬다.
 internal sealed class CliOptions
@@ -19,6 +19,8 @@ internal sealed class CliOptions
     public bool All { get; private set; }
     public string? Profile { get; private set; }
     public bool PdfNeedsFile { get; set; }
+    public bool Yes { get; private set; }
+    public bool Beta { get; private set; }
     public int HistoryLimit { get; private set; } = 50;
 
     public List<ScanRangeInfo> Ranges { get; } = new();
@@ -44,9 +46,9 @@ internal sealed class CliOptions
     {
         var o = new CliOptions();
         int start = 0;
-        if (args.Length > 0 && args[0] is "assets" or "alerts" or "settings" or "diag")
+        if (args.Length > 0 && args[0] is "assets" or "alerts" or "settings" or "diag" or "update")
         {
-            o.Command = args[0] switch { "assets" => CliCommand.Assets, "alerts" => CliCommand.Alerts, "settings" => CliCommand.Settings, _ => CliCommand.Diag };
+            o.Command = args[0] switch { "assets" => CliCommand.Assets, "alerts" => CliCommand.Alerts, "settings" => CliCommand.Settings, "update" => CliCommand.Update, _ => CliCommand.Diag };
             start = 1;
             if (args.Length > 1 && !args[1].StartsWith('-')) { o.Sub = args[1]; start = 2; }
             while (start < args.Length && !args[start].StartsWith('-')) o.Args.Add(args[start++]);
@@ -181,6 +183,8 @@ internal sealed class CliOptions
                 case "--tags": o.Tags = Next() ?? ""; break;
                 case "--note": o.Note = Next() ?? ""; break;
                 case "--all": o.All = true; break;
+                case "--yes": case "-y": o.Yes = true; break;
+                case "--beta": o.Beta = true; break;
 
                 case "--upload":
                     o.Upload = true;
@@ -260,6 +264,7 @@ USAGE:
   netscan alerts [list|ack <id>|snooze <id> [hours]|reopen <id>] [-o json]
   netscan settings [export <file>|import <file>]
   netscan diag [<zip path>]                  create a support/diagnostic bundle
+  netscan update [check|apply] [--beta] [-y]  self-update the headless binaries from GitHub Releases
 
 SCAN OPTIONS:
   --range <CIDR|start-end|ip>   Range to scan (repeatable). Examples:

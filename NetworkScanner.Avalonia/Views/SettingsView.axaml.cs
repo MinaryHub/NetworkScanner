@@ -146,6 +146,11 @@ namespace NetworkScanner.Avalonia.Views
 
             TbRetention.Text = data.HistoryRetentionDays.ToString();
             TbBackups.Text = data.HistoryBackupsToKeep.ToString();
+            ChkUpdateAutoCheck.IsChecked = data.Update.AutoCheck;
+            ChkUpdateAutoDownload.IsChecked = data.Update.AutoDownload;
+            ChkUpdateAutoApply.IsChecked = data.Update.AutoApply;
+            ChkUpdatePrerelease.IsChecked = data.Update.IncludePrerelease;
+            TbUpdateInterval.Text = data.Update.CheckIntervalHours.ToString();
             SelectByTag(CmbProfile, ScanProfiles.Name(ScanProfiles.Parse(data.ScanProfile)));
         }
 
@@ -218,6 +223,14 @@ namespace NetworkScanner.Avalonia.Views
                 AssessVulnerabilities = ChkVuln.IsChecked == true,
                 ScanProfile = SelectedTag(CmbProfile) ?? "standard",
                 HistoryRetentionDays = ParseInt(TbRetention.Text, -1),
+                Update = new UpdateSettings
+                {
+                    AutoCheck = ChkUpdateAutoCheck.IsChecked == true,
+                    AutoDownload = ChkUpdateAutoDownload.IsChecked == true,
+                    AutoApply = ChkUpdateAutoApply.IsChecked == true,
+                    IncludePrerelease = ChkUpdatePrerelease.IsChecked == true,
+                    CheckIntervalHours = ParseInt(TbUpdateInterval.Text, -1),
+                },
                 HistoryBackupsToKeep = Math.Max(0, ParseInt(TbBackups.Text, _loaded.HistoryBackupsToKeep)),
             };
 
@@ -491,6 +504,11 @@ namespace NetworkScanner.Avalonia.Views
                 TbMsg.Text = string.Format(Localization.T("msg.settings.importfailed"), ex.Message);
             }
         }
+
+        // MainWindow가 구독해 실제 확인을 수행한다(업데이트 관리자는 창이 소유).
+        public event Action? UpdateCheckRequested;
+        public void ShowUpdateStatus(string text) => TbUpdateStatus.Text = text;
+        private void BtnUpdateCheck_Click(object? sender, RoutedEventArgs e) => UpdateCheckRequested?.Invoke();
 
         private async void BtnDiag_Click(object? sender, RoutedEventArgs e)
         {

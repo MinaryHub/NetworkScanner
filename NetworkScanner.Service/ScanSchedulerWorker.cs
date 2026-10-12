@@ -1,5 +1,6 @@
 using System.Globalization;
 using NetworkScanner.Notifications;
+using NetworkScanner.Updates;
 using NetworkScanner.Upload;
 
 namespace NetworkScanner.Service;
@@ -48,6 +49,7 @@ public sealed class ScanSchedulerWorker : BackgroundService
 
         DateTime lastScheduledHour = ReadLastRun();
         DateTime lastMonitor = DateTime.MinValue;
+        DateTime lastUpdateCheck = DateTime.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -68,6 +70,13 @@ public sealed class ScanSchedulerWorker : BackgroundService
                     await RunScanAsync(stoppingToken, scheduled: false, settings);
                     lastMonitor = DateTime.Now;
                 }
+
+                // 자동 업데이트: 주기마다 확인하고(스캔 중이 아닐 때), 설정에 따라 내려받아 설치 후 재시작한다.
+                if (settings.Update.AutoCheck && (now - lastUpdateCheck).TotalHours >= Math.Max(1, settings.Update.CheckIntervalHours))
+                {
+                    lastUpdateCheck = now;
+                    if (await TrySelfUpdateAsync(settings.Update, stoppingToken)) return;
+                }
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
@@ -77,6 +86,43 @@ public sealed class ScanSchedulerWorker : BackgroundService
 
             try { await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken); }
             catch (OperationCanceledException) { break; }
+        }
+    }
+
+    // 새 버전을 확인하고(설정에 따라) 내려받아 적용한다. 적용했으면 true를 돌려주고 호출자는 프로세스를 끝낸다:
+    // Unix는 종료 코드 75로 systemd/launchd가 재시작하게 하고, Windows는 도우미가 서비스를 다시 시작한다.
+    private async Task<bool> TrySelfUpdateAsync(UpdateSettings update, CancellationToken ct)
+    {
+        try
+        {
+            var updater = new HeadlessUpdater();
+            HeadlessUpdate? found = await updater.CheckAsync(GitHubReleases.CurrentVersion(), update.IncludePrerelease, ct);
+            if (found == null) return false;
+            _log.LogInformation("update available: {Version} ({Asset})", found.Version, found.Archive.Name);
+            if (!update.AutoDownload) return false;
+
+            string stage = await updater.DownloadAndStageAsync(found, requireChecksum: true, null, ct);
+            _log.LogInformation("update {Version} downloaded and verified", found.Version);
+            if (!update.AutoApply) return false;
+
+            if (OperatingSystem.IsWindows())
+            {
+                HeadlessUpdater.LaunchWindowsApplyHelper(stage, HeadlessUpdater.InstallDirectory, "NetworkScanner");
+            }
+            else
+            {
+                int n = HeadlessUpdater.ApplyInPlace(stage, HeadlessUpdater.InstallDirectory);
+                _log.LogInformation("update applied ({Count} files); restarting", n);
+            }
+            Environment.ExitCode = 75;
+            _lifetime.StopApplication();
+            return true;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _log.LogWarning("self-update failed: {Message}", ex.Message);
+            return false;
         }
     }
 
