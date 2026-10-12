@@ -22,14 +22,16 @@ namespace NetworkScanner.Avalonia.Views
     public partial class SettingsView : UserControl
     {
         public ScanRangeList ScanRanges { get; } = new ScanRangeList();
+        // 데이터 인덱스(HourEnabled[i]) 기준 배열. 화면에는 00~23시 순서로 놓이지만 저장 레이아웃은 그대로다.
         private readonly CheckBox[] _hourCheckboxes = new CheckBox[24];
-        // 화면에 컨트롤이 없는 설정값은 저장 시 사라지지 않도록 필드로 들고 간다.
-        private bool _usageNoticeAccepted;
 
-        public void MarkUsageNoticeAccepted() => _usageNoticeAccepted = true;
-
-        // 화면에 노출되지 않는 값(컬럼 너비 등)을 저장 시 잃지 않도록 마지막으로 읽은 설정을 보관한다.
+        // 화면에 노출되지 않는 값(컬럼 너비, 고지 확인, 스캔 프로필 등)을 저장 시 잃지 않도록 마지막으로 읽은 설정을 보관한다.
         private AppSettingsData _loaded = new AppSettingsData();
+
+        // 심층 발견 서비스는 앱 시작 시 한 번 만들어지므로, 그때의 값과 달라지면 재시작 안내를 띄운다.
+        private readonly string _startupDiscovery;
+
+        public void MarkUsageNoticeAccepted() => _loaded.UsageNoticeAccepted = true;
 
         // 설정이 저장될 때마다 발생. MainWindow가 엔진 옵션(동시성/상한)을 갱신하는 데 쓴다.
         public event Action<AppSettingsData>? SettingsSaved;
@@ -41,8 +43,8 @@ namespace NetworkScanner.Avalonia.Views
         {
             InitializeComponent();
             BuildHourCheckboxes();
-            BuildProfileCombo();
             LoadFromStore();
+            _startupDiscovery = DiscoveryFingerprint(_loaded);
         }
 
         public void SetHistory(ScanHistoryStore? history)
@@ -51,28 +53,31 @@ namespace NetworkScanner.Avalonia.Views
             BtnBackupNow.IsEnabled = history != null;
         }
 
-        private void BuildProfileCombo()
-        {
-            foreach (ScanProfileKind kind in ScanProfiles.All)
-                CmbProfile.Items.Add(new ComboBoxItem { Content = ScanProfiles.DisplayName(kind), Tag = ScanProfiles.Name(kind) });
-        }
+        // IP 목록 화면의 프로필 콤보에서 바꾼 값을 기억해 둔다(저장은 그쪽에서 이미 했고, 이 화면의 저장이 되돌리지 않도록).
+        public void SetScanProfile(string name) => _loaded.ScanProfile = ScanProfiles.Name(ScanProfiles.Parse(name));
 
-        // IP 목록 화면의 프로필 콤보에서 바꾼 값을 이 화면에도 반영한다(저장은 그쪽에서 이미 했다).
-        public void SetScanProfile(string name)
-        {
-            SelectByTag(CmbProfile, ScanProfiles.Name(ScanProfiles.Parse(name)));
-            _loaded.ScanProfile = ScanProfiles.Name(ScanProfiles.Parse(name));
-        }
+        // 화면은 00~23시 순서. 데이터 인덱스는 AppSettingsData.IsInScheduleHour와 같은 규칙(0시 → [23], h시 → [h-1])을 따른다.
+        private static int HourIndex(int clockHour) => clockHour == 0 ? 23 : clockHour - 1;
 
         private void BuildHourCheckboxes()
         {
-            for (int label = 1; label <= 24; label++)
+            for (int hour = 0; hour < 24; hour++)
             {
-                var checkBox = new CheckBox { Content = Localization.IsKorean ? $"{label:D2}시" : $"{label:D2}h", Margin = new global::Avalonia.Thickness(8, 2) };
-                _hourCheckboxes[label - 1] = checkBox;
+                var checkBox = new CheckBox { Content = Localization.IsKorean ? $"{hour:D2}시" : $"{hour:D2}h", Margin = new global::Avalonia.Thickness(8, 2) };
+                _hourCheckboxes[HourIndex(hour)] = checkBox;
                 HourCheckboxPanel.Children.Add(checkBox);
             }
         }
+
+        // 재시작이 필요한 발견 설정만 모은 비교용 문자열(이력 병합·타임아웃·이름 프로브는 저장 즉시 반영되므로 제외).
+        private static string DiscoveryFingerprint(AppSettingsData d)
+        {
+            DiscoverySettings s = d.Discovery;
+            return string.Join("|", s.Ssdp, s.MdnsBrowse, s.Smb, s.Ssh, s.Http, s.UdpProbes, s.NeighborTables,
+                s.GatewaySnmp, s.SnmpAgents.Trim(), s.ActiveArp, s.PassiveListener, d.Identity.SnmpCommunity.Trim());
+        }
+
+        private void UpdateDiscoveryRestartHint() => TbDiscoveryRestart.IsVisible = DiscoveryFingerprint(_loaded) != _startupDiscovery;
 
         private void LoadFromStore()
         {
@@ -94,7 +99,7 @@ namespace NetworkScanner.Avalonia.Views
 
             UploadSettings up = data.Upload;
             ChkUseUpload.IsChecked = up.Enabled;
-            SelectByTag(CmbUploadProtocol, up.Protocol.ToString());
+            SelectByTag(CmbUploadProtocol, up.Protocol.ToString(), fallbackIndex: 1); // 못 찾으면 FTPS(explicit)
             TbUploadHost.Text = up.Host;
             TbUploadPort.Text = up.Port > 0 ? up.Port.ToString() : "";
             TbUploadUser.Text = up.User;
@@ -125,7 +130,6 @@ namespace NetworkScanner.Avalonia.Views
             TbPortsList.Text = data.PortList;
             ChkCheckPort.IsChecked = data.UsePortChecking;
             TbRiskAllow.Text = data.RiskAllowList;
-            _usageNoticeAccepted = data.UsageNoticeAccepted;
             ChkLoadLatestFileWhenStartup.IsChecked = data.LoadLatestFileOnStartup;
             ChkContinuousMonitoring.IsChecked = data.ContinuousMonitoring;
             TbMonitorInterval.Text = data.MonitorIntervalMinutes.ToString();
@@ -163,7 +167,7 @@ namespace NetworkScanner.Avalonia.Views
             ChkUpdateAutoApply.IsChecked = data.Update.AutoApply;
             ChkUpdatePrerelease.IsChecked = data.Update.IncludePrerelease;
             TbUpdateInterval.Text = data.Update.CheckIntervalHours.ToString();
-            SelectByTag(CmbProfile, ScanProfiles.Name(ScanProfiles.Parse(data.ScanProfile)));
+            UpdateUpdateToggles();
         }
 
         private AppSettingsData CollectSettingsFromControls()
@@ -200,16 +204,17 @@ namespace NetworkScanner.Avalonia.Views
                     MailFrom = (TbMailFrom.Text ?? "").Trim(),
                     MailTo = (TbMailTo.Text ?? "").Trim(),
                 },
-                ScanParallelism = int.TryParse(TbScanParallelism.Text, out int par) ? par : -1,
-                MaxTargets = int.TryParse(TbMaxTargets.Text, out int max) && max > 0 ? max : 65536,
+                // 숫자가 아니면 -1로 두어 Validate()(또는 ValidateNumbers())가 걸러내게 한다. 조용히 기본값으로 바꾸지 않는다.
+                ScanParallelism = ParseInt(TbScanParallelism.Text),
+                MaxTargets = ParseInt(TbMaxTargets.Text),
                 SystemName = TbCurSystemName.Text ?? "",
                 PortList = TbPortsList.Text ?? "",
                 UsePortChecking = ChkCheckPort.IsChecked == true,
                 RiskAllowList = TbRiskAllow.Text ?? "",
-                UsageNoticeAccepted = _usageNoticeAccepted,
+                UsageNoticeAccepted = _loaded.UsageNoticeAccepted,
                 LoadLatestFileOnStartup = ChkLoadLatestFileWhenStartup.IsChecked == true,
                 ContinuousMonitoring = ChkContinuousMonitoring.IsChecked == true,
-                MonitorIntervalMinutes = int.TryParse(TbMonitorInterval.Text, out int m) ? m : -1,
+                MonitorIntervalMinutes = ParseInt(TbMonitorInterval.Text),
                 Language = CmbLanguage.SelectedIndex == 1 ? Localization.Korean : Localization.English,
                 IpListColumnWidths = _loaded.IpListColumnWidths,
                 IpRangeColumnWidths = _loaded.IpRangeColumnWidths,
@@ -217,12 +222,11 @@ namespace NetworkScanner.Avalonia.Views
                 {
                     AlertOnUnapproved = ChkAlertUnapproved.IsChecked == true,
                     AutoApproveFirstScan = ChkAutoApprove.IsChecked == true,
-                    HighRiskThreshold = ParseInt(TbHighRisk.Text, _loaded.AssetPolicy.HighRiskThreshold),
+                    HighRiskThreshold = ParseInt(TbHighRisk.Text),
                 },
                 Alerts = new AlertSettings
                 {
-                    // 숫자가 아니면 -1로 두어 Validate()가 걸러내게 한다.
-                    RenotifyAfterHours = ParseInt(TbRenotify.Text, -1),
+                    RenotifyAfterHours = ParseInt(TbRenotify.Text),
                     MaintenanceWindows = (TbMaintenance.Text ?? "").Trim(),
                 },
                 Identity = new IdentitySettings
@@ -250,17 +254,17 @@ namespace NetworkScanner.Avalonia.Views
                     DiscoveryTimeoutMs = _loaded.Discovery.DiscoveryTimeoutMs,
                     ProbeTimeoutMs = _loaded.Discovery.ProbeTimeoutMs,
                 },
-                ScanProfile = SelectedTag(CmbProfile) ?? "standard",
-                HistoryRetentionDays = ParseInt(TbRetention.Text, -1),
+                ScanProfile = ScanProfiles.Name(ScanProfiles.Parse(_loaded.ScanProfile)),
+                HistoryRetentionDays = ParseInt(TbRetention.Text),
                 Update = new UpdateSettings
                 {
                     AutoCheck = ChkUpdateAutoCheck.IsChecked == true,
                     AutoDownload = ChkUpdateAutoDownload.IsChecked == true,
                     AutoApply = ChkUpdateAutoApply.IsChecked == true,
                     IncludePrerelease = ChkUpdatePrerelease.IsChecked == true,
-                    CheckIntervalHours = ParseInt(TbUpdateInterval.Text, -1),
+                    CheckIntervalHours = ParseInt(TbUpdateInterval.Text),
                 },
-                HistoryBackupsToKeep = Math.Max(0, ParseInt(TbBackups.Text, _loaded.HistoryBackupsToKeep)),
+                HistoryBackupsToKeep = ParseInt(TbBackups.Text),
             };
 
             for (int i = 0; i < 24; i++) data.HourEnabled[i] = _hourCheckboxes[i].IsChecked == true;
@@ -275,13 +279,35 @@ namespace NetworkScanner.Avalonia.Views
             return int.TryParse(text.Trim(), out int p) ? p : -1;
         }
 
-        // 숫자가 아니거나 비어 있으면 fallback.
-        private static int ParseInt(string? text, int fallback)
-            => int.TryParse((text ?? "").Trim(), out int v) ? v : fallback;
+        // 숫자가 아니거나 비어 있으면 -1(검증에서 걸러짐).
+        private static int ParseInt(string? text)
+            => int.TryParse((text ?? "").Trim(), out int v) ? v : -1;
+
+        // Core의 Validate()가 다루지 않는 숫자 칸(최대 주소 수, 고위험 기준, 백업 개수)은 여기서 걸러낸다.
+        private List<string> ValidateNumbers(AppSettingsData data)
+        {
+            var errors = new List<string>();
+            if (!int.TryParse((TbMaxTargets.Text ?? "").Trim(), out _))
+                errors.Add(string.Format(Localization.T("settings.invalid.number"), Localization.T("settings.maxtargets")));
+            else if (data.MaxTargets < 1)
+                errors.Add(Localization.T("settings.invalid.maxtargets"));
+
+            if (!int.TryParse((TbHighRisk.Text ?? "").Trim(), out _))
+                errors.Add(string.Format(Localization.T("settings.invalid.number"), Localization.T("settings.highrisk")));
+            else if (data.AssetPolicy.HighRiskThreshold < 0 || data.AssetPolicy.HighRiskThreshold > 100)
+                errors.Add(Localization.T("settings.invalid.highrisk"));
+
+            if (!int.TryParse((TbBackups.Text ?? "").Trim(), out _))
+                errors.Add(string.Format(Localization.T("settings.invalid.number"), Localization.T("settings.backups")));
+            else if (data.HistoryBackupsToKeep < 0)
+                errors.Add(Localization.T("settings.invalid.backups"));
+            return errors;
+        }
 
         private static string? SelectedTag(ComboBox combo) => (combo.SelectedItem as ComboBoxItem)?.Tag as string;
 
-        private static void SelectByTag(ComboBox combo, string tag)
+        // Tag가 일치하는 항목을 고른다. 없으면 fallbackIndex(호출자가 명시)로 간다.
+        private static void SelectByTag(ComboBox combo, string tag, int fallbackIndex)
         {
             for (int i = 0; i < combo.Items.Count; i++)
             {
@@ -291,22 +317,32 @@ namespace NetworkScanner.Avalonia.Views
                     return;
                 }
             }
-            combo.SelectedIndex = 1; // Ftps
+            combo.SelectedIndex = fallbackIndex;
         }
 
-        // 토큰은 HTTPS에서만, 평문 허용은 FTP에서만 의미가 있으므로 그 외에는 비활성 표시한다.
+        // 토큰은 HTTPS에서만, 평문 허용은 FTP에서만, 서버 지문(FTPS 인증서/SFTP 호스트 키)은 HTTPS가 아닐 때만 의미가 있다.
         private void CmbUploadProtocol_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
-            if (TbUploadToken == null || ChkUploadAllowInsecure == null) return;
+            if (TbUploadToken == null || ChkUploadAllowInsecure == null || TbUploadFingerprint == null) return;
             UploadProtocol protocol = UploadSettings.ParseProtocol(SelectedTag(CmbUploadProtocol));
             TbUploadToken.IsEnabled = protocol == UploadProtocol.Https;
             ChkUploadAllowInsecure.IsEnabled = protocol == UploadProtocol.Ftp;
+            TbUploadFingerprint.IsEnabled = protocol != UploadProtocol.Https;
+        }
+
+        // 자동 확인이 꺼져 있으면 백그라운드 다운로드/종료 시 설치는 일어날 수 없으므로 비활성 표시한다.
+        private void ChkUpdateAutoCheck_Changed(object? sender, RoutedEventArgs e) => UpdateUpdateToggles();
+
+        private void UpdateUpdateToggles()
+        {
+            if (ChkUpdateAutoDownload == null || ChkUpdateAutoApply == null) return;
+            bool autoCheck = ChkUpdateAutoCheck.IsChecked == true;
+            ChkUpdateAutoDownload.IsEnabled = autoCheck;
+            ChkUpdateAutoApply.IsEnabled = autoCheck;
         }
 
         public string GetColumnWidths() => ColumnLayout.Serialize(DgIPRange);
-        public void ApplyColumnWidths(string csv) => ColumnLayout.Apply(DgIPRange, csv);
-
-        public bool IsInScheduleHour(int hour) => CollectSettingsFromControls().IsInScheduleHour(hour);
+        public void ApplyColumnWidths(string saved) => ColumnLayout.Apply(DgIPRange, saved);
 
         public string GetSystemName() => TbCurSystemName.Text ?? "";
 
@@ -323,7 +359,8 @@ namespace NetworkScanner.Avalonia.Views
         private async System.Threading.Tasks.Task<bool> SaveSettingsAsync()
         {
             AppSettingsData data = CollectSettingsFromControls();
-            List<string> errors = data.Validate();
+            List<string> errors = ValidateNumbers(data);
+            errors.AddRange(data.Validate());
             if (errors.Count > 0)
             {
                 TbMsg.Text = Localization.T("settings.invalid.title");
@@ -334,6 +371,7 @@ namespace NetworkScanner.Avalonia.Views
 
             AppSettingsStore.SaveSettings(data);
             _loaded = data;
+            UpdateDiscoveryRestartHint();
             TbMsg.Text = Localization.T("msg.settings.saved");
             SettingsSaved?.Invoke(data);
             return true;
@@ -524,6 +562,7 @@ namespace NetworkScanner.Avalonia.Views
             {
                 AppSettingsStore.Import(path);
                 LoadFromStore();
+                UpdateDiscoveryRestartHint();
                 TbMsg.Text = Localization.T("msg.settings.imported");
                 SettingsSaved?.Invoke(_loaded);
             }

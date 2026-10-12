@@ -6,10 +6,10 @@ namespace NetworkScanner.Tests
     public class UserGuideTests
     {
         [Fact]
-        public void Languages_ContainsAllFour_EnglishFirstAsDefault()
+        public void Languages_MatchUiLanguages_EnglishFirstAsDefault()
         {
             var codes = UserGuide.Languages.Select(l => l.Code).ToArray();
-            Assert.Equal(new[] { "en", "ko", "ja", "zh" }, codes);
+            Assert.Equal(new[] { Localization.English, Localization.Korean }, codes);
         }
 
         [Fact]
@@ -31,9 +31,18 @@ namespace NetworkScanner.Tests
         }
 
         [Fact]
+        public void GetSections_CoversCurrentFeatureSet()
+        {
+            string all = string.Join("\n", UserGuide.GetSections("en").Select(s => s.Heading + "\n" + s.Body));
+            foreach (string topic in new[] { "profile", "Risky only", "Unapprove", "Evidence", "SSDP", "passive", "FTPS", "outbox", "snooze", "PDF", "diagnostic", "Restore", "beta", "netscan-service" })
+                Assert.Contains(topic, all);
+        }
+
+        [Fact]
         public void GetSections_UnknownLanguage_FallsBackToEnglish()
         {
             Assert.Equal(UserGuide.GetSections("en"), UserGuide.GetSections("fr"));
+            Assert.Equal(UserGuide.GetSections("en"), UserGuide.GetSections("ja"));
         }
     }
 }

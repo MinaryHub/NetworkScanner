@@ -51,15 +51,18 @@ public partial class MainWindow : Window, IScanConfigProvider
         _services = ScanServices.CreateDefault(startup, passiveSnapshot: _passive == null ? null : () => _passive.SnapshotByIp());
         _ipListView.Initialize(this, _services, ScanOptions.FromSettings(startup));
         _ipListView.AlertsProcessed += OnAlertsProcessed;
+        _ipListView.ScanStarted += OnScanStarted;
         _ipListView.ScanFinished += OnScanFinished;
         _ipListView.ProfileChanged += _settingsView.SetScanProfile;
         _settingsView.SettingsSaved += data =>
         {
             _ipListView.ApplyOptions(ScanOptions.FromSettings(data));
             _ipListView.SetProfile(data.ScanProfile);
+            _historyView.SetRetentionDays(data.HistoryRetentionDays);
         };
         _settingsView.SetHistory(_services.History);
         _historyView.Initialize(_services.History);
+        _historyView.SetRetentionDays(startup.HistoryRetentionDays);
         _historyView.AlertsChanged += UpdateAlertsLabel;
         ContentArea.Content = _ipListView;
         SetActiveNav(BtnIPList);
@@ -78,9 +81,7 @@ public partial class MainWindow : Window, IScanConfigProvider
         Closing += (_, _) =>
         {
             AppSettingsStore.SaveColumnLayout(_ipListView.GetColumnWidths(), _settingsView.GetColumnWidths());
-            // 내려받아 둔 업데이트가 있고 자동 설치가 켜져 있으면 종료 직후 조용히 설치된다.
-            if (_updateService.State == UpdateState.Ready && _settingsView.GetCurrentSettings().Update.AutoApply)
-                _updateService.ScheduleApplyOnExit();
+            // 종료 시 자동 설치는 다운로드가 끝날 때 UpdateService.DownloadAsync(autoApplyOnExit)가 이미 예약한다.
             AppLogger.LogInfo("NetworkScanner", "프로그램 종료");
         };
 
@@ -156,6 +157,13 @@ public partial class MainWindow : Window, IScanConfigProvider
         });
     }
 
+    // 스캔이 시작되면 패시브 캡처에서 오래 조용한(1시간 이상) 호스트 항목을 버려, 지난 관측이 이번 스캔에서 "살아있음"으로 남지 않게 한다.
+    private void OnScanStarted()
+    {
+        try { _passive?.Prune(TimeSpan.FromHours(1)); }
+        catch (Exception ex) { AppLogger.LogWarn("NetworkScanner", "passive prune failed: " + ex.Message); }
+    }
+
     private void OnScanFinished()
     {
         UpdateOutboxLabel();
@@ -208,8 +216,7 @@ public partial class MainWindow : Window, IScanConfigProvider
 
     // ---- 자동 업데이트 ----
     // 설정(Update.*)에 따라 시작 시·주기적으로 확인하고, 백그라운드로 내려받고, 종료 시 자동 설치한다.
-    // 설치본이 아닌 개발 실행(dotnet run)에서는 조용히 아무것도 하지 않는다.
-    private DateTime _lastUpdateCheck = DateTime.MinValue;
+    // 설치본이 아닌 개발 실행(dotnet run)에서는 조용히 아무것도 하지 않는다. 마지막 확인 시각은 UpdateService.LastCheck가 갖는다.
 
     // 패시브 캡처(설정에서 켠 경우, libpcap/npcap + 권한 필요). 실패해도 앱은 그대로 동작한다.
     private NetworkScanner.Capture.PassiveListener? _listener;
@@ -245,7 +252,6 @@ public partial class MainWindow : Window, IScanConfigProvider
         AppSettingsData settings = _settingsView.GetCurrentSettings();
         try
         {
-            _lastUpdateCheck = DateTime.Now;
             string? newVersion = await _updateService.CheckAsync();
             if (manual && _updateService.State == UpdateState.NotInstalled)
                 _settingsView.ShowUpdateStatus(Localization.T("update.notinstalled"));
@@ -323,7 +329,9 @@ public partial class MainWindow : Window, IScanConfigProvider
                 case UpdateState.Failed:
                     BtnUpdate.IsEnabled = false;
                     if (_updateService.AvailableVersion == null) await _updateService.CheckAsync();
-                    if (_updateService.AvailableVersion != null) await _updateService.DownloadAsync(autoApplyOnExit: false);
+                    // 수동 다운로드도 설정의 '종료 시 설치'를 따른다(종료 시 따로 예약하는 코드는 없다).
+                    if (_updateService.AvailableVersion != null)
+                        await _updateService.DownloadAsync(autoApplyOnExit: _settingsView.GetCurrentSettings().Update.AutoApply);
                     break;
             }
         }
@@ -339,7 +347,7 @@ public partial class MainWindow : Window, IScanConfigProvider
     private void TickUpdateCheck(AppSettingsData settings, DateTime now)
     {
         if (!settings.Update.AutoCheck) return;
-        if ((now - _lastUpdateCheck).TotalHours < Math.Max(1, settings.Update.CheckIntervalHours)) return;
+        if ((now - _updateService.LastCheck).TotalHours < Math.Max(1, settings.Update.CheckIntervalHours)) return;
         if (_updateService.State is UpdateState.Downloading or UpdateState.Ready or UpdateState.Checking) return;
         _ = CheckForUpdatesAsync(manual: false);
     }
@@ -410,14 +418,13 @@ public partial class MainWindow : Window, IScanConfigProvider
     // 사이드바에서 지금 어느 화면을 보고 있는지 좌측 강조선 + 배경 틴트로 표시한다.
     private void SetActiveNav(Button active)
     {
-        var accent = (IBrush)Resources["AccentBrush"]!;
-        var activeBg = (IBrush)Resources["SideActiveBackgroundBrush"]!;
-        var inactiveBg = (IBrush)Resources["SideBackgroundBrush"]!;
+        IBrush accent = ThemeBrushes.Get("TealLightBrush", "#FF2DD4BF");
+        IBrush activeBg = ThemeBrushes.Get("NavyRaisedBrush", "#FF16243A");
 
         foreach (Button nav in new[] { BtnIPList, BtnSetting, BtnPortInfo, BtnHistory, BtnGuide })
         {
             bool isActive = ReferenceEquals(nav, active);
-            nav.Background = isActive ? activeBg : inactiveBg;
+            nav.Background = isActive ? activeBg : Brushes.Transparent;
             nav.BorderBrush = isActive ? accent : Brushes.Transparent;
         }
     }
