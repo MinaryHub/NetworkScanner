@@ -83,8 +83,10 @@ namespace NetworkScanner.Discovery
             string service = facts.BestValue(FactFields.Service);
             if (string.IsNullOrEmpty(info.Service) && !string.IsNullOrEmpty(service)) info.Service = service;
 
-            string description = facts.BestValue(FactFields.Description);
-            if (string.IsNullOrEmpty(info.SysDescr) && !string.IsNullOrEmpty(description)) info.SysDescr = description;
+            // 설명: 프로브가 확인한(High) 값은 재스캔 때 갱신하고, SSDP 위치 같은 낮은 확신 값은 빈 칸만 채운다.
+            Fact? descFact = facts.Best(FactFields.Description);
+            if (descFact != null && !string.IsNullOrEmpty(descFact.Value) && (string.IsNullOrEmpty(info.SysDescr) || BetterThan(descFact, Confidence.Medium)))
+                info.SysDescr = descFact.Value;
 
             info.FactsJson = facts.ToJson();
         }

@@ -52,15 +52,5 @@ namespace NetworkScanner.Tests
 
             Assert.Empty(list);
         }
-
-        [Fact]
-        public void IsExist_ByIndex_ReturnsExpectedResult()
-        {
-            var list = new ScanRangeList();
-            list.AddItem(new ScanRangeInfo { Index = 5, StartIP = "10.0.0.1", EndIP = "10.0.0.10", Description = "test" });
-
-            Assert.True(list.IsExist(5));
-            Assert.False(list.IsExist(6));
-        }
     }
 }

@@ -1,11 +1,12 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
-using NetworkScanner;
+using NetworkScanner.Network;
 
 namespace NetworkScanner.Tests
 {
-    public class PingTesterTcpTests
+    public class TcpLivenessTests
     {
         [Fact]
         public async Task IsAliveByTcpAsync_ReturnsTrue_WhenOneProbePortIsListening()
@@ -16,7 +17,7 @@ namespace NetworkScanner.Tests
             int port = ((IPEndPoint)listener.LocalEndpoint).Port;
             try
             {
-                bool alive = await PingTester.IsAliveByTcpAsync(new[] { 1, 2, port }, "127.0.0.1", timeoutMs: 500);
+                bool alive = await new TcpPortProber().IsAliveByTcpAsync("127.0.0.1", new[] { 1, 2, port }, 500, CancellationToken.None);
                 Assert.True(alive);
             }
             finally
@@ -29,7 +30,7 @@ namespace NetworkScanner.Tests
         public async Task IsAliveByTcpAsync_ReturnsFalse_WhenNoProbePortResponds()
         {
             // 닫혀 있을 가능성이 매우 높은 포트들만 두드리면 살아있지 않음으로 판정해야 한다.
-            bool alive = await PingTester.IsAliveByTcpAsync(new[] { 1, 2, 3 }, "127.0.0.1", timeoutMs: 300);
+            bool alive = await new TcpPortProber().IsAliveByTcpAsync("127.0.0.1", new[] { 1, 2, 3 }, 300, CancellationToken.None);
             Assert.False(alive);
         }
     }

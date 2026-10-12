@@ -39,7 +39,7 @@ public sealed class ScanSchedulerWorker : BackgroundService
         AppSettingsStore.OnError = m => _log.LogError("{Message}", m);
         OUIInfo.OnError = m => _log.LogWarning("{Message}", m);
         PortReferenceLoader.OnError = m => _log.LogWarning("{Message}", m);
-        PingTester.OnError = m => _log.LogWarning("{Message}", m);
+        NetworkScanner.Network.IcmpPinger.OnError = m => _log.LogWarning("{Message}", m);
 
         _log.LogInformation("NetworkScanner service started. Settings: {Path}", AppSettingsStore.SettingsPath);
         StartPassiveIfEnabled(AppSettingsStore.LoadSettings());

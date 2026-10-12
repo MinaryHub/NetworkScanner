@@ -22,15 +22,6 @@ namespace NetworkScanner.Discovery.Fingerprint
             return Tlv(0x60, Tlv(0x06, OidSpnego), negTokenInit);
         }
 
-        // negTokenResp{ negState, supportedMech=NTLMSSP, responseToken } (서버 역할: 테스트/루프백용)
-        public static byte[] WrapNegTokenResp(byte[] responseToken, byte negState = 0x01 /* accept-incomplete */)
-        {
-            byte[] state = Tlv(0xa0, Tlv(0x0a, new[] { negState }));
-            byte[] mech = Tlv(0xa1, Tlv(0x06, OidNtlmssp));
-            byte[] token = Tlv(0xa2, Tlv(0x04, responseToken));
-            return Tlv(0xa1, Tlv(0x30, state, mech, token));
-        }
-
         // 보안 블롭 어디에 있든 "NTLMSSP\0" 서명부터 끝까지를 돌려준다(서버가 SPNEGO 없이 생 NTLM을 보내도 동작).
         // NTLM 메시지는 자체 오프셋/길이로 읽으므로 뒤에 DER 꼬리(mechListMIC 등)가 붙어 있어도 무해하다.
         public static byte[]? ExtractNtlmToken(ReadOnlySpan<byte> blob)

@@ -54,11 +54,6 @@ namespace NetworkScanner.Capture
             lock (_lock) return _byIp.TryGetValue(ip, out Entry? e) ? e.LastSeen : null;
         }
 
-        public DateTimeOffset? LastSeenByMac(string mac)
-        {
-            lock (_lock) return _byMac.TryGetValue(mac, out Entry? e) ? e.LastSeen : null;
-        }
-
         // IP가 알려진 MAC의 최신 IP(DHCP DISCOVER처럼 IP 없이 온 관찰을 엔진이 합칠 때 사용).
         public string? IpOfMac(string mac)
         {
@@ -90,7 +85,6 @@ namespace NetworkScanner.Capture
         }
 
         public IReadOnlyDictionary<string, HostFacts> SnapshotByIp() => Snapshot().ByIp;
-        public IReadOnlyDictionary<string, HostFacts> SnapshotByMac() => Snapshot().ByMac;
 
         // maxAge보다 오래 조용한 호스트 항목을 버린다. 지운 항목 수를 돌려준다.
         public int Prune(TimeSpan maxAge) => Prune(maxAge, DateTimeOffset.UtcNow);

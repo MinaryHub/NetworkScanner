@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -46,11 +45,8 @@ namespace NetworkScanner.Discovery.Infrastructure
             using var overall = CancellationTokenSource.CreateLinkedTokenSource(ct);
             overall.CancelAfter(Math.Clamp(timeoutMs * 20, 5_000, 60_000));
 
-            UdpClient? client = null;
             try
             {
-                if (_transport == null) client = CreateClient(agent);
-
                 string current = root;
                 bool useBulk = true;
                 bool firstRequest = true;
@@ -62,7 +58,7 @@ namespace NetworkScanner.Discovery.Infrastructure
                         ? SnmpBer.BuildGetBulk(community, requestId, current, 0, MaxRepetitions)
                         : SnmpBer.BuildGetNext(community, requestId, current);
 
-                    SnmpBer.Pdu? response = await ExchangeAsync(client, agent, request, requestId, timeoutMs, overall.Token).ConfigureAwait(false);
+                    SnmpBer.Pdu? response = await ExchangeAsync(agent, request, requestId, timeoutMs, overall.Token).ConfigureAwait(false);
 
                     if (response == null)
                     {
@@ -96,46 +92,33 @@ namespace NetworkScanner.Discovery.Infrastructure
             {
                 AppLogger.LogDebug(nameof(SnmpWalker), $"{agent} {root} 걷기 중단: {ex.Message}");
             }
-            finally
-            {
-                client?.Dispose();
-            }
             return rows;
         }
 
-        // 스칼라 GET. SnmpCodec의 GetRequest/Response 처리를 그대로 쓰고 전송만 공유한다. 응답이 없으면 null.
+        // 스칼라 GET(요청당 timeoutMs, 최대 AttemptsPerRequest회). SnmpCodec의 GetRequest/Response 처리를 그대로 쓰고
+        // 전송은 UdpExchange를 공유한다. 응답이 없거나 취소되면 null(예외 없음).
         public async Task<IReadOnlyDictionary<string, string>?> GetAsync(IPAddress agent, string community, string[] oids, int timeoutMs, CancellationToken ct)
         {
             if (oids.Length == 0 || timeoutMs <= 0) return null;
-            UdpClient? client = null;
             try
             {
-                if (_transport == null) client = CreateClient(agent);
                 int requestId = NextRequestId();
                 byte[] request = SnmpCodec.BuildGetRequest(community, requestId, oids);
                 Dictionary<string, string>? values = null;
 
-                for (int attempt = 0; attempt < AttemptsPerRequest && values == null; attempt++)
+                await SendReceiveAsync(agent, request, timeoutMs, data =>
                 {
-                    ct.ThrowIfCancellationRequested();
-                    await SendReceiveAsync(client, agent, request, timeoutMs, data =>
-                    {
-                        if (!SnmpCodec.TryParseResponse(data, out int id, out var parsed) || id != requestId) return false;
-                        values = parsed;
-                        return true;
-                    }, ct).ConfigureAwait(false);
-                    if (_transport != null) break; // 가짜 전송은 재시도 의미 없음
-                }
+                    // 요청 ID가 다른 응답(이전 시도의 늦은 응답 등)은 무시한다.
+                    if (!SnmpCodec.TryParseResponse(data, out int id, out var parsed) || id != requestId) return false;
+                    values = parsed;
+                    return true;
+                }, ct).ConfigureAwait(false);
                 return values;
             }
             catch (Exception ex)
             {
                 AppLogger.LogDebug(nameof(SnmpWalker), $"{agent} GET 실패: {ex.Message}");
                 return null;
-            }
-            finally
-            {
-                client?.Dispose();
             }
         }
 
@@ -146,60 +129,23 @@ namespace NetworkScanner.Discovery.Infrastructure
             return id;
         }
 
-        private static UdpClient CreateClient(IPAddress agent)
-        {
-            return new UdpClient(new IPEndPoint(agent.AddressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, 0));
-        }
-
         // 한 요청을 보내고 요청 ID가 맞는 Response PDU를 돌려준다. 재시도 후에도 없으면 null.
-        private async Task<SnmpBer.Pdu?> ExchangeAsync(UdpClient? client, IPAddress agent, byte[] request, int requestId, int timeoutMs, CancellationToken ct)
+        private async Task<SnmpBer.Pdu?> ExchangeAsync(IPAddress agent, byte[] request, int requestId, int timeoutMs, CancellationToken ct)
         {
+            if (ct.IsCancellationRequested) return null;
             SnmpBer.Pdu? result = null;
-            for (int attempt = 0; attempt < AttemptsPerRequest && result == null; attempt++)
+            await SendReceiveAsync(agent, request, timeoutMs, data =>
             {
-                if (ct.IsCancellationRequested) return null;
-                await SendReceiveAsync(client, agent, request, timeoutMs, data =>
-                {
-                    if (!SnmpBer.TryParse(data, out SnmpBer.Pdu pdu) || pdu.Type != SnmpBer.PduResponse || pdu.RequestId != requestId) return false;
-                    result = pdu;
-                    return true;
-                }, ct).ConfigureAwait(false);
-                if (_transport != null) break;
-            }
+                if (!SnmpBer.TryParse(data, out SnmpBer.Pdu pdu) || pdu.Type != SnmpBer.PduResponse || pdu.RequestId != requestId) return false;
+                result = pdu;
+                return true;
+            }, ct).ConfigureAwait(false);
             return result;
         }
 
-        // 요청 한 번 전송 후 timeoutMs 동안 accept가 true를 돌려주는 데이터그램을 기다린다.
-        private async Task SendReceiveAsync(UdpClient? client, IPAddress agent, byte[] request, int timeoutMs, Func<byte[], bool> accept, CancellationToken ct)
-        {
-            if (_transport != null)
-            {
-                byte[]? reply = await _transport(request).ConfigureAwait(false);
-                if (reply != null) accept(reply);
-                return;
-            }
-            if (client == null) return;
-
-            using var slice = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            slice.CancelAfter(timeoutMs);
-            try
-            {
-                await client.SendAsync(request, new IPEndPoint(agent, _port), slice.Token).ConfigureAwait(false);
-                while (true)
-                {
-                    UdpReceiveResult r = await client.ReceiveAsync(slice.Token).ConfigureAwait(false);
-                    if (!r.RemoteEndPoint.Address.Equals(agent)) continue;
-                    if (accept(r.Buffer)) return;
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // 요청 타임아웃 또는 호출자 취소
-            }
-            catch (SocketException)
-            {
-                // ICMP port unreachable(Windows는 ConnectionReset) → 닫힌 포트
-            }
-        }
+        // 요청을 시도당 timeoutMs로 최대 AttemptsPerRequest회 보내고, accept가 true를 돌려주는 데이터그램을 기다린다.
+        // 전송·재시도·주소 필터링은 UdpExchange가 맡는다(가짜 전송이면 한 번만).
+        private Task<byte[]?> SendReceiveAsync(IPAddress agent, byte[] request, int timeoutMs, Func<byte[], bool> accept, CancellationToken ct)
+            => UdpExchange.SendReceiveAsync(agent, _port, request, timeoutMs * AttemptsPerRequest, AttemptsPerRequest, accept, ct, _transport);
     }
 }

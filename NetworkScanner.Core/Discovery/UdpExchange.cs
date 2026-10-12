@@ -8,15 +8,22 @@ namespace NetworkScanner.Discovery
 {
     // 프로브 공통 UDP 왕복: 임의 포트에 바인딩해 요청 데이터그램을 보내고, 대상 주소에서 온 첫 번째 "수락된" 응답을
     // 돌려준다. 전체 timeoutMs 안에서 attempts회까지 재전송하며, 다른 주소에서 온 패킷은 무시한다.
+    // transport가 주어지면 소켓 대신 그것을 쓴다(테스트용 가짜 전송: 요청 바이트 → 응답 바이트 또는 null=무응답, 재시도 없음).
     internal static class UdpExchange
     {
         // 파싱 상한. 이보다 긴 데이터그램은 앞부분만 넘긴다.
         public const int MaxDatagramBytes = 4096;
 
         public static async Task<byte[]?> SendReceiveAsync(IPAddress ip, int port, byte[] request, int timeoutMs,
-            int attempts, Func<byte[], bool> accept, CancellationToken ct)
+            int attempts, Func<byte[], bool> accept, CancellationToken ct, Func<byte[], Task<byte[]?>>? transport = null)
         {
             if (timeoutMs <= 0 || attempts <= 0) return null;
+            if (transport != null)
+            {
+                ct.ThrowIfCancellationRequested();
+                byte[]? reply = await transport(request).ConfigureAwait(false);
+                return reply != null && accept(reply) ? reply : null;
+            }
 
             using var overall = CancellationTokenSource.CreateLinkedTokenSource(ct);
             overall.CancelAfter(timeoutMs);

@@ -73,18 +73,6 @@ namespace NetworkScanner.Discovery
             return facts;
         }
 
-        // UI 툴팁/상세용 한 줄 요약: "os: Windows 10 (SMB, High); name: pc7 (NetBIOS, High)"
-        public string Summarize(params string[] fields)
-        {
-            var parts = new List<string>();
-            foreach (string field in fields.Length == 0 ? _facts.Select(f => f.Field).Distinct().ToArray() : fields)
-            {
-                Fact? b = Best(field);
-                if (b != null) parts.Add($"{field}: {b.Value} ({b.Source}, {b.Confidence})");
-            }
-            return string.Join("; ", parts);
-        }
-
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -105,5 +93,12 @@ namespace NetworkScanner.Discovery
     {
         string Name { get; }
         System.Threading.Tasks.Task<IReadOnlyDictionary<string, IReadOnlyList<Fact>>> DiscoverAsync(int timeoutMs, System.Threading.CancellationToken ct);
+    }
+
+    // 스캔 대역(대상 IP 목록)을 알아야 동작하는 발견(능동 ARP 등). 엔진은 스캔마다 그 스캔의 대상 목록을 넘긴다.
+    public interface ITargetedNetworkDiscovery : INetworkDiscovery
+    {
+        System.Threading.Tasks.Task<IReadOnlyDictionary<string, IReadOnlyList<Fact>>> DiscoverAsync(
+            IReadOnlyList<System.Net.IPAddress> targets, int timeoutMs, System.Threading.CancellationToken ct);
     }
 }

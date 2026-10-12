@@ -211,6 +211,85 @@ namespace NetworkScanner.Tests
         }
 
         [Fact]
+        public void DeleteHost_RemovesInventoryRowOnly_AndKeepsScanHistory()
+        {
+            using var store = new ScanHistoryStore(_dbPath);
+            store.RecordScan(Scan1());
+            store.RecordScan(Scan2());
+            Assert.Equal(3, store.GetInventory().Count);
+
+            Assert.True(store.DeleteHost("10.0.0.2"));
+
+            Assert.Equal(new[] { "10.0.0.1", "10.0.0.3" }, store.GetInventory().Select(h => h.Ip).ToArray());
+            // 스캔별 기록(scan_hosts)은 그대로 남는다.
+            Assert.Equal(2, store.GetHostHistory("10.0.0.2").Count);
+            Assert.Equal(2, store.ListScans().Count);
+            // 없는 IP는 false. 다음 스캔에 다시 나타나면 새 행으로 기록된다(first_seen 갱신).
+            Assert.False(store.DeleteHost("10.0.0.2"));
+            Assert.False(store.DeleteHost("10.9.9.9"));
+            store.RecordScan(Scan2());
+            Assert.Equal(T2, store.GetInventory().Single(h => h.Ip == "10.0.0.2").FirstSeen);
+        }
+
+        [Fact]
+        public void HostNotes_SetAndGet_OnlyNonEmpty_AndKeepOtherMeta()
+        {
+            using var store = new ScanHistoryStore(_dbPath);
+            store.RecordScan(Scan1());
+            store.SetHostMeta("10.0.0.1", "ops", "core", null);
+
+            int n = store.SetHostNotes(new[]
+            {
+                new KeyValuePair<string, string>("10.0.0.1", "3층 회의실"),
+                new KeyValuePair<string, string>("10.0.0.9", "미등록 장비"),   // 인벤토리에 없던 IP는 행을 만든다
+                new KeyValuePair<string, string>(" ", "ignored"),
+            });
+            Assert.Equal(2, n);
+
+            var notes = store.GetHostNotes();
+            Assert.Equal(2, notes.Count);
+            Assert.Equal("3층 회의실", notes["10.0.0.1"]);
+            Assert.Equal("미등록 장비", notes["10.0.0.9"]);
+            Assert.Equal("ops", store.GetInventory().Single(h => h.Ip == "10.0.0.1").Owner); // 소유자/태그는 유지
+
+            store.SetHostNotes(new[] { new KeyValuePair<string, string>("10.0.0.1", "") });
+            Assert.False(store.GetHostNotes().ContainsKey("10.0.0.1")); // 빈 비고는 목록에 나오지 않는다
+        }
+
+        [Fact]
+        public void Open_MigratesLegacyAnnotationsIni_IntoHostNotes_Once()
+        {
+            string ini = Path.Combine(_dir, ScanHistoryStore.LegacyAnnotationsFileName);
+            File.WriteAllText(ini,
+                "10.0.0.1\t회의실 PC\t3층, 담당: 홍길동\n" +
+                "10.0.0.2\t\t\n" +                       // 둘 다 비어 있으면 무시
+                "not-an-ip\tx\ty\n" +                     // 잘못된 줄은 건너뜀
+                "10.0.0.3\tnas\t\r\n" +                   // 이름만 있는 항목
+                "10.0.0.1\t회의실 PC\t마지막 줄이 이김\n", System.Text.Encoding.UTF8);
+
+            using (var store = new ScanHistoryStore(_dbPath))
+            {
+                var notes = store.GetHostNotes();
+                Assert.Single(notes);
+                Assert.Equal("마지막 줄이 이김", notes["10.0.0.1"]);
+                var inv = store.GetInventory();
+                Assert.Equal("회의실 PC", inv.Single(h => h.Ip == "10.0.0.1").LastName);
+                Assert.Equal("nas", inv.Single(h => h.Ip == "10.0.0.3").LastName);
+                Assert.DoesNotContain(inv, h => h.Ip == "10.0.0.2");
+            }
+            Assert.False(File.Exists(ini));
+            Assert.True(File.Exists(ini + ".migrated"));
+
+            // 두 번째로 열 때는 이관할 파일이 없고, 기존 비고는 그대로다. 사용자가 입력한 비고는 이관이 덮지 않는다.
+            File.WriteAllText(ini, "10.0.0.1\tother\t덮어쓰면 안 됨\n", System.Text.Encoding.UTF8);
+            using (var store = new ScanHistoryStore(_dbPath))
+            {
+                Assert.Equal("마지막 줄이 이김", store.GetHostNotes()["10.0.0.1"]);
+                Assert.Equal("회의실 PC", store.GetInventory().Single(h => h.Ip == "10.0.0.1").LastName);
+            }
+        }
+
+        [Fact]
         public void FromItems_MapsIPInfoFields()
         {
             var items = new List<IPInfo>

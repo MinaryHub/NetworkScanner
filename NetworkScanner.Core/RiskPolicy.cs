@@ -23,10 +23,6 @@ namespace NetworkScanner
 
         public static RiskPolicy Empty { get; } = new(Array.Empty<int>());
 
-        public int ProhibitedCount => _prohibited.Count;
-
-        public bool TryAddAllow(string entry) => AddAllow(entry);
-
         private bool AddAllow(string? raw)
         {
             if (string.IsNullOrWhiteSpace(raw)) return false;

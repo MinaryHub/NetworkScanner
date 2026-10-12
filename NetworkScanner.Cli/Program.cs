@@ -32,7 +32,7 @@ if (options.Error != null)
 
 // 오류는 로그 파일 외에 stderr로도 흘려보낸다.
 OUIInfo.OnError = m => Console.Error.WriteLine("warn: " + m);
-PingTester.OnError = m => Console.Error.WriteLine("warn: " + m);
+NetworkScanner.Network.IcmpPinger.OnError = m => Console.Error.WriteLine("warn: " + m);
 PortReferenceLoader.OnError = m => Console.Error.WriteLine("warn: " + m);
 AppSettingsStore.OnError = m => Console.Error.WriteLine("warn: " + m);
 AppLogger.Sink += (level, _, m) => { if (level >= NetworkScanner.LogLevel.Error) Console.Error.WriteLine("error: " + m); };

@@ -37,7 +37,6 @@ namespace NetworkScanner.Discovery.Fingerprint
         private const int MaxBodyBytes = 64 * 1024;
         private const int MaxRedirects = 2;
 
-        public static readonly int[] HttpPorts = { 80, 8080, 8000, 8008, 8081, 8888 };
         public static readonly int[] HttpsPorts = { 443, 8443 };
         private static readonly int[] Preference = { 443, 80, 8443, 8080, 8000, 8008, 8081, 8888 };
 

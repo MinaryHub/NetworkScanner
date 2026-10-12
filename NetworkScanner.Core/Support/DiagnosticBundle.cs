@@ -67,7 +67,7 @@ namespace NetworkScanner.Support
             sb.AppendLine();
 
             sb.AppendLine("[files]");
-            foreach (string name in new[] { "settings.json", "history.db", "annotations.ini", "known_hosts" })
+            foreach (string name in new[] { "settings.json", "history.db", "known_hosts" })
             {
                 string p = UserDataPaths.Resolve(name);
                 sb.AppendLine($"{name}: {(File.Exists(p) ? new FileInfo(p).Length.ToString(CultureInfo.InvariantCulture) + " bytes" : "missing")}");

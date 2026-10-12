@@ -22,15 +22,19 @@ namespace NetworkScanner.Discovery
             Priority = priority ?? DefaultPriority;
         }
 
-        // 기본 구성: NetBIOS + mDNS + SNMP(community 지정 가능)
-        public static CompositeIdentityProbe CreateDefault(string snmpCommunity = "public")
-            => new(new IIdentityProbe[] { new NetBiosProbe(), new MdnsProbe(), new SnmpProbe(snmpCommunity) });
+        // 옵션에 맞는 조합(NetBIOS/mDNS/SNMP)을 만든다. 엔진과 테스트가 같은 공장을 쓴다. 하나도 켜지 않으면 null.
+        public static CompositeIdentityProbe? Create(bool snmp, bool mdns, bool netbios, string snmpCommunity = "public")
+        {
+            var probes = new List<IIdentityProbe>();
+            if (netbios) probes.Add(new NetBiosProbe());
+            if (mdns) probes.Add(new MdnsProbe());
+            if (snmp) probes.Add(new SnmpProbe(snmpCommunity));
+            return probes.Count == 0 ? null : new CompositeIdentityProbe(probes);
+        }
 
         public string Name => "Composite";
 
         public IReadOnlyList<string> Priority { get; }
-
-        public IReadOnlyList<IIdentityProbe> Probes => _probes;
 
         // 응답한 프로브의 결과만, 우선순위 순으로.
         public async Task<IReadOnlyList<HostIdentity>> ProbeAllAsync(IPAddress ip, int timeoutMs, CancellationToken ct)

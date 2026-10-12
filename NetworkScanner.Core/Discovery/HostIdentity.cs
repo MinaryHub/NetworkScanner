@@ -26,8 +26,6 @@ namespace NetworkScanner.Discovery
         public const string AttrMdnsName = "mdns.name";
         public const string AttrSnmpSysName = "snmp.sysname";
         public const string AttrSnmpSysDescr = "snmp.sysdescr";
-
-        public static readonly IReadOnlyDictionary<string, string> NoAttributes = new Dictionary<string, string>();
     }
 
     // 호스트 한 대를 대상으로 단일 프로토콜 질의를 보내 식별 정보를 얻는다. 구현체는 절대 예외를 던지지 않고

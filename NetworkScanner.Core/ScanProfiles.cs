@@ -27,9 +27,12 @@ namespace NetworkScanner
 
         public static IReadOnlyList<ScanProfileKind> All { get; } = new[] { ScanProfileKind.Quick, ScanProfileKind.Standard, ScanProfileKind.Thorough };
 
-        // 프로필을 옵션에 적용한다. Standard는 설정값 그대로.
+        // 프로필을 옵션에 적용한다. 세 프로필은 서로 같은 필드 집합을 모두 설정하므로, 같은 옵션 객체에
+        // 다른 프로필을 연달아 적용해도 이전 프로필의 값이 남지 않는다. Standard는 ScanOptions 기본값을 되돌린다
+        // (식별/평가 사용 여부는 설정값이므로 Standard에서는 건드리지 않는다).
         public static ScanOptions Apply(ScanOptions options, ScanProfileKind kind)
         {
+            var defaults = new ScanOptions();
             switch (kind)
             {
                 case ScanProfileKind.Quick:
@@ -37,11 +40,13 @@ namespace NetworkScanner
                     options.PingTimeoutMs = 300;
                     options.TcpLivenessTimeoutMs = 300;
                     options.PortTimeoutMs = 200;
+                    options.BannerTimeoutMs = defaults.BannerTimeoutMs;
                     options.DnsTimeoutMs = 500;
                     options.IdentityProbes = false;
                     options.BannerGrab = false;
                     options.AssessVulnerabilities = false;
                     options.DeepDiscovery = false;
+                    options.ExtraPorts = Array.Empty<int>();
                     break;
                 case ScanProfileKind.Thorough:
                     options.Parallelism = Math.Min(options.Parallelism, 32);
@@ -53,9 +58,21 @@ namespace NetworkScanner
                     options.IdentityProbes = true;
                     options.BannerGrab = true;
                     options.AssessVulnerabilities = true;
+                    options.DeepDiscovery = true;
                     options.ExtraPorts = TopPorts;
                     break;
+                default:
+                    options.PingTimeoutMs = defaults.PingTimeoutMs;
+                    options.TcpLivenessTimeoutMs = defaults.TcpLivenessTimeoutMs;
+                    options.PortTimeoutMs = defaults.PortTimeoutMs;
+                    options.BannerTimeoutMs = defaults.BannerTimeoutMs;
+                    options.DnsTimeoutMs = defaults.DnsTimeoutMs;
+                    options.BannerGrab = defaults.BannerGrab;
+                    options.DeepDiscovery = defaults.DeepDiscovery;
+                    options.ExtraPorts = Array.Empty<int>();
+                    break;
             }
+            options.Profile = kind;
             return options;
         }
 
