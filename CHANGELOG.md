@@ -2,6 +2,9 @@
 
 ## Unreleased (2.1.0) — commercial feature set
 
+### Renamed
+- The product is now **KetworkScanner**: solution, projects, namespaces, assembly names (`KetworkScanner.Avalonia`), Velopack package id, window/package titles, documentation and the GitHub repository (`MinaryHub/KetworkScanner`). The CLI, service and collector binaries keep their `netscan*` names. User data moves to the `KetworkScanner` folder (`%APPDATA%\KetworkScanner`, `~/Library/Application Support/KetworkScanner`, `~/.config/KetworkScanner`); settings, history, secrets, outbox, backups and reference data are copied from the old `NetworkScanner` folder on first start, and Keychain/libsecret entries saved under the old service name are still read. Installed GUI copies of the old package id are not updated automatically: install the new package once.
+
 ### Added (reference data)
 - **Automatic reference-data refresh**: the reserved/backdoor port lists, OUI tables and vulnerability rules are compared with `data/refdata.json` in the repository at startup and every 24 h (configurable, Settings → Updates) and newer files are downloaded into the user data folder after SHA-256 and content checks; the Ref. Ports screen shows versions and offers *Update now*; `netscan refdata [check|update]`; the service refreshes too. A weekly workflow regenerates the port list from the IANA registry (6,000+ TCP ports, hand-added trojan ports kept) and the OUI tables from IEEE.
 

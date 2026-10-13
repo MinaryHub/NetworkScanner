@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256">
-  <!-- NetworkScanner 앱 아이콘 "펄스": 중심 노드에서 퍼지는 두 겹의 호와, 호 위에서 잡힌 장비 한 점.
+  <!-- KetworkScanner 앱 아이콘 "펄스": 중심 노드에서 퍼지는 두 겹의 호와, 호 위에서 잡힌 장비 한 점.
        Harbor Navy 바탕 + Harbor Teal 액센트(UI 테마와 동일). 64px 이상에서 사용.
        모든 형태는 fill만 쓴다(stroke를 빼먹는 래스터라이저가 있어 선은 고리/부채꼴 도형으로 그렸다). -->
   <rect x="8" y="8" width="240" height="240" rx="56" fill="#0F1B2D"/>

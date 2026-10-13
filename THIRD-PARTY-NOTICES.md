@@ -1,6 +1,6 @@
 # Third-party notices
 
-NetworkScanner bundles or depends on the following third-party components.
+KetworkScanner bundles or depends on the following third-party components.
 
 | Component | License | Use |
 |---|---|---|

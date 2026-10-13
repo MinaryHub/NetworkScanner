@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>netscan</AssemblyName>
+    <RootNamespace>KetworkScanner.Cli</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- 개발 머신에 .NET 10 런타임이 없어도(더 새 버전만 설치된 경우) 로컬 실행이 가능하도록 허용. -->
+    <RollForward>LatestMajor</RollForward>
+    <Version>2.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KetworkScanner.Core\KetworkScanner.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 옵션 파서/표 렌더러는 internal이라 테스트 프로젝트에만 연다. -->
+    <InternalsVisibleTo Include="KetworkScanner.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 참조 데이터 파일은 저장소 루트의 data/ 에 한 벌만 두고, GUI/CLI가 링크로 실행 파일 옆에 복사한다. -->
+    <None Include="..\data\ouiinfo.ini" Link="ouiinfo.ini">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\data\ouiinfo-mam.ini" Link="ouiinfo-mam.ini">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\data\ouiinfo-mas.ini" Link="ouiinfo-mas.ini">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\data\prohibitports.ini" Link="prohibitports.ini">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="..\data\reservedports.ini" Link="reservedports.ini">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="..\data\refdata.json" Link="refdata.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\data\vulnrules.json" Link="vulnrules.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

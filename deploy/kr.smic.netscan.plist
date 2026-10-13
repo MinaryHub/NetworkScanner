@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- launchd 에이전트 — 로그인 사용자 컨텍스트에서 NetworkScanner 스케줄러를 상주시킨다.
+<!-- launchd 에이전트 — 로그인 사용자 컨텍스트에서 KetworkScanner 스케줄러를 상주시킨다.
      cp kr.smic.netscan.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/kr.smic.netscan.plist
      /opt/netscan 경로는 설치 위치에 맞게 바꾼다.
      launchd는 StandardOutPath의 "~"를 풀어 주지 않으므로 셸을 거쳐 $HOME/Library/Logs/netscan/ 에 로그를 쓴다
-     (Console.app의 "로그 리포트" 아래에 보인다). 설정/데이터는 ~/Library/Application Support/NetworkScanner. -->
+     (Console.app의 "로그 리포트" 아래에 보인다). 설정/데이터는 ~/Library/Application Support/KetworkScanner. -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>

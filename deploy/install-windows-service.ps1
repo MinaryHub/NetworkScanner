@@ -1,14 +1,14 @@
 # Windows 서비스 등록 (관리자 PowerShell에서 실행). 설치 폴더는 인자로 지정.
-#   .\install-windows-service.ps1 -InstallDir "C:\Program Files\NetworkScanner\service"
+#   .\install-windows-service.ps1 -InstallDir "C:\Program Files\KetworkScanner\service"
 #   .\install-windows-service.ps1 -Credential (Get-Credential)            # 지정한 사용자 계정으로 실행
 #   .\install-windows-service.ps1 -Account "NT AUTHORITY\NetworkService"  # 가상 계정으로 실행
-# 서비스는 실행 계정의 %APPDATA%\NetworkScanner\settings.json 을 읽는다(GUI에서 저장한 것과 같은 파일).
+# 서비스는 실행 계정의 %APPDATA%\KetworkScanner\settings.json 을 읽는다(GUI에서 저장한 것과 같은 파일).
 # LocalSystem(기본)으로 돌리면 GUI 사용자의 설정이 아니라 시스템 프로필의 설정을 읽으므로, 보통은 GUI를 쓰는
 # 사용자 계정(-Credential)으로 등록하는 편이 설정을 공유하기 쉽다.
 [CmdletBinding()]
 param(
-    [string]$InstallDir = "C:\Program Files\NetworkScanner\service",
-    [string]$ServiceName = "NetworkScanner",
+    [string]$InstallDir = "C:\Program Files\KetworkScanner\service",
+    [string]$ServiceName = "KetworkScanner",
     # 서비스를 실행할 사용자 계정(암호 포함). 생략하면 -Account 또는 LocalSystem.
     [System.Management.Automation.PSCredential]$Credential,
     # 암호 없는 가상/관리 계정 이름(예: "NT AUTHORITY\NetworkService", "NT AUTHORITY\LocalService").
@@ -19,7 +19,7 @@ $ErrorActionPreference = "Stop"
 $exe = Join-Path $InstallDir "netscan-service.exe"
 if (-not (Test-Path $exe)) { throw "not found: $exe" }
 
-$createArgs = @("create", $ServiceName, "binPath=", "`"$exe`"", "start=", "delayed-auto", "DisplayName=", "NetworkScanner Scheduler")
+$createArgs = @("create", $ServiceName, "binPath=", "`"$exe`"", "start=", "delayed-auto", "DisplayName=", "KetworkScanner Scheduler")
 $runAs = "LocalSystem"
 if ($Credential) {
     $user = $Credential.UserName
@@ -41,14 +41,14 @@ Start-Service $ServiceName
 function Resolve-SettingsPath([string]$runAsAccount) {
     $windir = $env:SystemRoot
     switch -Regex ($runAsAccount) {
-        '^LocalSystem$'                         { return "$windir\System32\config\systemprofile\AppData\Roaming\NetworkScanner\settings.json" }
-        '^NT AUTHORITY\\NetworkService$'        { return "$windir\ServiceProfiles\NetworkService\AppData\Roaming\NetworkScanner\settings.json" }
-        '^NT AUTHORITY\\LocalService$'          { return "$windir\ServiceProfiles\LocalService\AppData\Roaming\NetworkScanner\settings.json" }
+        '^LocalSystem$'                         { return "$windir\System32\config\systemprofile\AppData\Roaming\KetworkScanner\settings.json" }
+        '^NT AUTHORITY\\NetworkService$'        { return "$windir\ServiceProfiles\NetworkService\AppData\Roaming\KetworkScanner\settings.json" }
+        '^NT AUTHORITY\\LocalService$'          { return "$windir\ServiceProfiles\LocalService\AppData\Roaming\KetworkScanner\settings.json" }
         default {
             $name = ($runAsAccount -split '[\\@]')[-1]
             if ($runAsAccount -match '@') { $name = ($runAsAccount -split '@')[0] }
             $profiles = Split-Path $env:USERPROFILE -Parent
-            return (Join-Path $profiles "$name\AppData\Roaming\NetworkScanner\settings.json") + "  (profile is created on first logon/run)"
+            return (Join-Path $profiles "$name\AppData\Roaming\KetworkScanner\settings.json") + "  (profile is created on first logon/run)"
         }
     }
 }

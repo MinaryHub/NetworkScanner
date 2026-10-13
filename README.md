@@ -1,4 +1,4 @@
-# NetworkScanner
+# KetworkScanner
 
 A cross-platform network inventory and security scanner. It pings an IP range, records each live host's open TCP ports, MAC address / vendor, host name and service banner, flags ports commonly used by backdoors, detects changes between scans (new/offline hosts, MAC changes, newly opened or risky ports), keeps a local scan history, and can save, upload and alert on the results on a schedule.
 
@@ -6,11 +6,11 @@ It ships as:
 
 | Front-end | Binary | Platforms |
 |---|---|---|
-| GUI ([Avalonia](https://avaloniaui.net)) | `NetworkScanner.Avalonia` | Windows x64/arm64, macOS arm64/x64, Linux x64/arm64 |
+| GUI ([Avalonia](https://avaloniaui.net)) | `KetworkScanner.Avalonia` | Windows x64/arm64, macOS arm64/x64, Linux x64/arm64 |
 | CLI | `netscan` | same, plus a Docker image |
 | Headless scheduler | `netscan-service` | Windows Service, systemd, launchd, foreground |
 
-All three share one engine, `NetworkScanner.Core`. The UI is available in English (default) and Korean; the in-app user guide also has Japanese and Chinese.
+All three share one engine, `KetworkScanner.Core`. The UI is available in English (default) and Korean; the in-app user guide also has Japanese and Chinese.
 
 ## Download
 
@@ -18,9 +18,9 @@ Grab the file for your OS from the **[Releases page](../../releases/latest)**.
 
 | OS | GUI | Headless (CLI + service) |
 |---|---|---|
-| Windows x64 / arm64 | `NetworkScanner-win-Setup.exe` / `NetworkScanner-win-arm64-Setup.exe` (or the `-Portable.zip`) | `netscan-<ver>-win-x64.zip`, `…-win-arm64.zip` |
-| macOS Apple Silicon / Intel | `NetworkScanner-osx-Setup.pkg` / `NetworkScanner-osx-x64-Setup.pkg` | `netscan-<ver>-osx-arm64.tar.gz`, `…-osx-x64.tar.gz` |
-| Linux x64 / arm64 | `NetworkScanner-linux.AppImage` / `NetworkScanner-linux-arm64.AppImage` | `netscan-<ver>-linux-x64.tar.gz`, `…-linux-arm64.tar.gz` |
+| Windows x64 / arm64 | `KetworkScanner-win-Setup.exe` / `KetworkScanner-win-arm64-Setup.exe` (or the `-Portable.zip`) | `netscan-<ver>-win-x64.zip`, `…-win-arm64.zip` |
+| macOS Apple Silicon / Intel | `KetworkScanner-osx-Setup.pkg` / `KetworkScanner-osx-x64-Setup.pkg` | `netscan-<ver>-osx-arm64.tar.gz`, `…-osx-x64.tar.gz` |
+| Linux x64 / arm64 | `KetworkScanner-linux.AppImage` / `KetworkScanner-linux-arm64.AppImage` | `netscan-<ver>-linux-x64.tar.gz`, `…-linux-arm64.tar.gz` |
 | Docker | — | `ghcr.io/<owner>/netscan:<ver>` (CLI), `ghcr.io/<owner>/netscan-collector:<ver>` (collector) |
 
 The `*.nupkg`, `RELEASES*`, `assets.*.json` and `releases.*.json` files are Velopack's auto-update feed; you don't need them.
@@ -47,14 +47,14 @@ The `*.nupkg`, `RELEASES*`, `assets.*.json` and `releases.*.json` files are Velo
 
 | Path | Description |
 |---|---|
-| `NetworkScanner.Core/` | Engine and all shared logic (`net10.0`, no UI dependency) |
-| `NetworkScanner.Avalonia/` | GUI |
-| `NetworkScanner.Cli/` | `netscan` command-line front-end |
-| `NetworkScanner.Service/` | `netscan-service` headless scheduler (Microsoft.Extensions.Hosting worker) |
-| `NetworkScanner.Collector/` | `netscan-collector` central report collector (ASP.NET Core minimal API + SQLite index + dashboard) |
-| `NetworkScanner.Tests/` | xUnit tests for Core (run on every OS, no real network needed) |
-| `NetworkScanner.Cli.Tests/` | xUnit tests for the CLI option parser and table renderer |
-| `NetworkScanner.Collector.Tests/` | xUnit integration tests for the collector (in-memory test server) |
+| `KetworkScanner.Core/` | Engine and all shared logic (`net10.0`, no UI dependency) |
+| `KetworkScanner.Avalonia/` | GUI |
+| `KetworkScanner.Cli/` | `netscan` command-line front-end |
+| `KetworkScanner.Service/` | `netscan-service` headless scheduler (Microsoft.Extensions.Hosting worker) |
+| `KetworkScanner.Collector/` | `netscan-collector` central report collector (ASP.NET Core minimal API + SQLite index + dashboard) |
+| `KetworkScanner.Tests/` | xUnit tests for Core (run on every OS, no real network needed) |
+| `KetworkScanner.Cli.Tests/` | xUnit tests for the CLI option parser and table renderer |
+| `KetworkScanner.Collector.Tests/` | xUnit integration tests for the collector (in-memory test server) |
 | `data/` | Bundled reference data: `ouiinfo.ini` / `ouiinfo-mam.ini` / `ouiinfo-mas.ini` (IEEE MA-L/MA-M/MA-S registries), `reservedports.ini`, `prohibitports.ini`, `vulnrules.json` (offline vulnerability rules) |
 | `assets/` | App icon (`icon/*.svg` masters → `app.ico` / `app.icns` / `app.png` via `tools/build-icons.sh`), bundled fonts and toolbar images |
 | `deploy/` | systemd unit, launchd plist, Windows service install/uninstall scripts, Dockerfiles for the CLI and the collector |
@@ -70,11 +70,11 @@ Inside Core: `ScanEngine` (scan flow), `ScanServices` (pluggable `IPinger` / `IP
 ## Build and run
 
 ```bash
-dotnet build NetworkScanner.sln                        # whole solution, any OS
-dotnet run --project NetworkScanner.Avalonia           # GUI
-dotnet run --project NetworkScanner.Cli -- --help      # CLI
-dotnet run --project NetworkScanner.Service -- --run-once
-dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj
+dotnet build KetworkScanner.sln                        # whole solution, any OS
+dotnet run --project KetworkScanner.Avalonia           # GUI
+dotnet run --project KetworkScanner.Cli -- --help      # CLI
+dotnet run --project KetworkScanner.Service -- --run-once
+dotnet test KetworkScanner.Tests/KetworkScanner.Tests.csproj
 ```
 
 ## Command-line interface (`netscan`)
@@ -125,7 +125,7 @@ docker run --rm --net=host --cap-add=NET_RAW ghcr.io/<owner>/netscan --range 10.
 
 ## Central collector (`netscan-collector`)
 
-Several sites can report to one server: the collector (`NetworkScanner.Collector`, Docker image `ghcr.io/<owner>/netscan-collector`) accepts the scanners' HTTPS uploads (one Bearer token per site), stores CSV/HTML/PDF/JSON reports, parses the CSVs into per-scan summaries and host lists, and serves a dashboard (`/`, `/sites/{site}`, `/reports/{id}`; sign in with a token on `/login`, rate-limited) plus a JSON API (`/api/sites`, `/api/sites/{site}/scans`, `/api/sites/{site}/scans/{id}/hosts`, `/api/uploads/{id}`, Bearer token). Each site keeps its newest `ScansPerSite` scans and report files. See [`deploy/README.md`](deploy/README.md#central-collector-netscan-collector) for configuration; put a TLS-terminating reverse proxy in front of it.
+Several sites can report to one server: the collector (`KetworkScanner.Collector`, Docker image `ghcr.io/<owner>/netscan-collector`) accepts the scanners' HTTPS uploads (one Bearer token per site), stores CSV/HTML/PDF/JSON reports, parses the CSVs into per-scan summaries and host lists, and serves a dashboard (`/`, `/sites/{site}`, `/reports/{id}`; sign in with a token on `/login`, rate-limited) plus a JSON API (`/api/sites`, `/api/sites/{site}/scans`, `/api/sites/{site}/scans/{id}/hosts`, `/api/uploads/{id}`, Bearer token). Each site keeps its newest `ScansPerSite` scans and report files. See [`deploy/README.md`](deploy/README.md#central-collector-netscan-collector) for configuration; put a TLS-terminating reverse proxy in front of it.
 
 ## Headless scheduler (`netscan-service`)
 
@@ -138,7 +138,7 @@ Several sites can report to one server: the collector (`NetworkScanner.Collector
 
 ## Runtime configuration / data files
 
-User data lives in a per-user folder that survives updates: `%APPDATA%\NetworkScanner` on Windows, `~/Library/Application Support/NetworkScanner` on macOS, `~/.config/NetworkScanner` on Linux. (Data an older macOS build left in `~/.config/NetworkScanner` is copied over on first start.)
+User data lives in a per-user folder that survives updates: `%APPDATA%\KetworkScanner` on Windows, `~/Library/Application Support/KetworkScanner` on macOS, `~/.config/KetworkScanner` on Linux. (Data an older macOS build left in `~/.config/KetworkScanner` is copied over on first start.)
 
 | File | Purpose |
 |---|---|
@@ -165,13 +165,13 @@ Settings → *Notifications*: webhook URL (JSON `{"text": …}`), syslog host/po
 ## Packaging for distribution
 
 ```bash
-dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj -c Release -r osx-arm64 --self-contained true -o publish/osx-arm64
+dotnet publish KetworkScanner.Avalonia/KetworkScanner.Avalonia.csproj -c Release -r osx-arm64 --self-contained true -o publish/osx-arm64
 dotnet tool install -g vpk
-vpk pack --packId NetworkScanner --packVersion 2.0.0 --packDir publish/osx-arm64 --mainExe NetworkScanner.Avalonia \
-  --packTitle "Network Scanner" --packAuthors SMIC --runtime osx-arm64 --channel osx --outputDir release-packages/osx-arm64
+vpk pack --packId KetworkScanner --packVersion 2.0.0 --packDir publish/osx-arm64 --mainExe KetworkScanner.Avalonia \
+  --packTitle "Ketwork Scanner" --packAuthors SMIC --runtime osx-arm64 --channel osx --outputDir release-packages/osx-arm64
 ```
 
-`vpk` packages only for the OS it runs on. On Windows add `--mainExe NetworkScanner.Avalonia.exe --icon assets/app.ico`. Channels: `win`, `win-arm64`, `osx`, `osx-x64`, `linux`, `linux-arm64`.
+`vpk` packages only for the OS it runs on. On Windows add `--mainExe KetworkScanner.Avalonia.exe --icon assets/app.ico`. Channels: `win`, `win-arm64`, `osx`, `osx-x64`, `linux`, `linux-arm64`.
 
 ## Releases
 
@@ -187,4 +187,4 @@ Pushing a `v*.*.*` tag runs `.github/workflows/release.yml`, which runs the test
 
 ## License
 
-See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for bundled components. The license for NetworkScanner itself is defined by the repository owner (`LICENSE`).
+See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for bundled components. The license for KetworkScanner itself is defined by the repository owner (`LICENSE`).

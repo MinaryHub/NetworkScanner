@@ -52,13 +52,13 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Build solution
-        run: dotnet build NetworkScanner.sln -c Release -p:Version=${{ needs.version.outputs.value }}
+        run: dotnet build KetworkScanner.sln -c Release -p:Version=${{ needs.version.outputs.value }}
       - name: Test Core
-        run: dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj -c Release --no-build
+        run: dotnet test KetworkScanner.Tests/KetworkScanner.Tests.csproj -c Release --no-build
       - name: Test CLI
-        run: dotnet test NetworkScanner.Cli.Tests/NetworkScanner.Cli.Tests.csproj -c Release --no-build
+        run: dotnet test KetworkScanner.Cli.Tests/KetworkScanner.Cli.Tests.csproj -c Release --no-build
       - name: Test collector
-        run: dotnet test NetworkScanner.Collector.Tests/NetworkScanner.Collector.Tests.csproj -c Release --no-build
+        run: dotnet test KetworkScanner.Collector.Tests/KetworkScanner.Collector.Tests.csproj -c Release --no-build
 
   package:
     name: GUI (${{ matrix.rid }})
@@ -72,33 +72,33 @@ jobs:
           - os: windows-latest
             rid: win-x64
             channel: win
-            mainExe: NetworkScanner.Avalonia.exe
+            mainExe: KetworkScanner.Avalonia.exe
             icon: assets/app.ico
           - os: windows-latest
             rid: win-arm64
             channel: win-arm64
-            mainExe: NetworkScanner.Avalonia.exe
+            mainExe: KetworkScanner.Avalonia.exe
             icon: assets/app.ico
           - os: macos-latest
             rid: osx-arm64
             channel: osx
-            mainExe: NetworkScanner.Avalonia
+            mainExe: KetworkScanner.Avalonia
             icon: assets/app.icns
           # Intel macOS 패키징: macos-13 러너는 퇴역했고 macos-15-intel 이 마지막 x64 러너다.
           - os: macos-15-intel
             rid: osx-x64
             channel: osx-x64
-            mainExe: NetworkScanner.Avalonia
+            mainExe: KetworkScanner.Avalonia
             icon: assets/app.icns
           - os: ubuntu-latest
             rid: linux-x64
             channel: linux
-            mainExe: NetworkScanner.Avalonia
+            mainExe: KetworkScanner.Avalonia
             icon: assets/app.png
           - os: ubuntu-24.04-arm
             rid: linux-arm64
             channel: linux-arm64
-            mainExe: NetworkScanner.Avalonia
+            mainExe: KetworkScanner.Avalonia
             icon: assets/app.png
     runs-on: ${{ matrix.os }}
     steps:
@@ -109,7 +109,7 @@ jobs:
 
       - name: Publish self-contained (${{ matrix.rid }})
         run: >
-          dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj
+          dotnet publish KetworkScanner.Avalonia/KetworkScanner.Avalonia.csproj
           -c Release -r ${{ matrix.rid }} --self-contained true
           -p:Version=${{ needs.version.outputs.value }}
           -o publish/${{ matrix.rid }}
@@ -175,15 +175,15 @@ jobs:
               EXTRA="$EXTRA --notaryProfile netscan-notary"
             fi
           fi
-          eval vpk pack --packId NetworkScanner --packVersion "${{ needs.version.outputs.value }}" \
+          eval vpk pack --packId KetworkScanner --packVersion "${{ needs.version.outputs.value }}" \
             --packDir "publish/${{ matrix.rid }}" --mainExe "${{ matrix.mainExe }}" \
-            --packTitle "\"Network Scanner\"" --packAuthors SMIC \
+            --packTitle "\"Ketwork Scanner\"" --packAuthors SMIC \
             --runtime ${{ matrix.rid }} --channel ${{ matrix.channel }} --outputDir "release-packages/${{ matrix.rid }}" $EXTRA
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NetworkScanner-${{ matrix.rid }}
+          name: KetworkScanner-${{ matrix.rid }}
           path: release-packages/${{ matrix.rid }}
 
   # 헤드리스 CLI(netscan)와 스케줄러 서비스(netscan-service)를 OS/아키텍처별 단일 실행 파일로 publish해 압축본으로 첨부한다.
@@ -216,7 +216,7 @@ jobs:
       - name: Publish CLI and service (${{ matrix.rid }})
         shell: bash
         run: |
-          for proj in NetworkScanner.Cli NetworkScanner.Service; do
+          for proj in KetworkScanner.Cli KetworkScanner.Service; do
             dotnet publish $proj/$proj.csproj -c Release -r ${{ matrix.rid }} --self-contained true \
               -p:PublishSingleFile=true -p:Version=${{ needs.version.outputs.value }} -o publish-headless/${{ matrix.rid }}
           done

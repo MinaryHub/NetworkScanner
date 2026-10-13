@@ -14,12 +14,12 @@ Both Dockerfiles take a `VERSION` build argument (`--build-arg VERSION=2.1.0`) t
 
 ## Headless scheduler (`netscan-service`)
 
-The scheduler reads the same `settings.json` as the GUI (per-user data folder: `%APPDATA%\NetworkScanner`, `~/Library/Application Support/NetworkScanner` on macOS, `~/.config/NetworkScanner` on Linux). It validates the file on every reload and **skips scans while it is invalid** (the problem is logged once). Run `netscan-service --run-once` to execute a single scheduled-style scan (CSV + HTML + PDF report, upload, notifications) — handy for cron; the passive listener is not started in that mode.
+The scheduler reads the same `settings.json` as the GUI (per-user data folder: `%APPDATA%\KetworkScanner`, `~/Library/Application Support/KetworkScanner` on macOS, `~/.config/KetworkScanner` on Linux). It validates the file on every reload and **skips scans while it is invalid** (the problem is logged once). Run `netscan-service --run-once` to execute a single scheduled-style scan (CSV + HTML + PDF report, upload, notifications) — handy for cron; the passive listener is not started in that mode.
 
-- **Linux (systemd)**: `netscan.service` runs as user `netscan` under `ProtectSystem=strict`. `ReadWritePaths` lists `%h/.config/NetworkScanner` (the data folder of that user) and `/opt/netscan` (so the in-place self-update can replace the binaries). For an account without a home directory use the commented `StateDirectory=netscan` + `XDG_CONFIG_HOME=%S/netscan` variant instead.
+- **Linux (systemd)**: `netscan.service` runs as user `netscan` under `ProtectSystem=strict`. `ReadWritePaths` lists `%h/.config/KetworkScanner` (the data folder of that user) and `/opt/netscan` (so the in-place self-update can replace the binaries). For an account without a home directory use the commented `StateDirectory=netscan` + `XDG_CONFIG_HOME=%S/netscan` variant instead.
 - **macOS (launchd)**: the plist wraps the binary in `/bin/sh` so `$HOME` expands; stdout/stderr go to `~/Library/Logs/netscan/netscan-service.{log,err}`.
 - **Windows**: `install-windows-service.ps1 [-InstallDir …] [-Credential (Get-Credential) | -Account "NT AUTHORITY\NetworkService"]`. The script prints the resolved `settings.json` path of the chosen account (LocalSystem uses the system profile, not your own `%APPDATA%`); register it with the account that uses the GUI to share one settings file. `uninstall-windows-service.ps1` removes it.
-- **CLI image**: `docker run --rm --net=host --cap-add=NET_RAW -v netscan-data:/home/netscan/.config/NetworkScanner ghcr.io/<owner>/netscan --range 192.168.1.0/24`. `iputils-ping` is installed because TTL measurement (OS guess) reads the `ping` utility's output on Linux.
+- **CLI image**: `docker run --rm --net=host --cap-add=NET_RAW -v netscan-data:/home/netscan/.config/KetworkScanner ghcr.io/<owner>/netscan --range 192.168.1.0/24`. `iputils-ping` is installed because TTL measurement (OS guess) reads the `ping` utility's output on Linux.
 
 ## Central collector (`netscan-collector`)
 

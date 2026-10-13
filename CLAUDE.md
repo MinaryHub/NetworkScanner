@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A network inventory / security scanner: pings an IP range, records each host's alive state, open TCP ports, MAC/vendor, hostname and service banner, flags open ports that match a reserved/prohibited (backdoor) port list, detects changes between scans, keeps a SQLite history, saves CSV/HTML/JSON reports, uploads them (FTPS/SFTP/HTTPS) with a retry outbox, and sends alerts (webhook/syslog/SMTP). One engine (`NetworkScanner.Core`) is driven by three front-ends: a cross-platform Avalonia GUI, a CLI (`netscan`) and a headless scheduler service (`netscan-service`).
+A network inventory / security scanner: pings an IP range, records each host's alive state, open TCP ports, MAC/vendor, hostname and service banner, flags open ports that match a reserved/prohibited (backdoor) port list, detects changes between scans, keeps a SQLite history, saves CSV/HTML/JSON reports, uploads them (FTPS/SFTP/HTTPS) with a retry outbox, and sends alerts (webhook/syslog/SMTP). One engine (`KetworkScanner.Core`) is driven by three front-ends: a cross-platform Avalonia GUI, a CLI (`netscan`) and a headless scheduler service (`netscan-service`).
 
 ## Build / test / run
 
@@ -12,34 +12,34 @@ Requires the **.NET 10 SDK** (all projects target `net10.0`). On this machine it
 
 ```bash
 # Whole solution — builds on Windows, macOS and Linux (there are no OS-specific projects)
-dotnet build NetworkScanner.sln
+dotnet build KetworkScanner.sln
 
 # GUI
-dotnet run --project NetworkScanner.Avalonia
+dotnet run --project KetworkScanner.Avalonia
 
 # CLI
-dotnet run --project NetworkScanner.Cli -- --range 192.168.1.0/24 --ports 22,80
-dotnet run --project NetworkScanner.Cli -- history inventory
+dotnet run --project KetworkScanner.Cli -- --range 192.168.1.0/24 --ports 22,80
+dotnet run --project KetworkScanner.Cli -- history inventory
 
 # Headless scheduler (foreground; --run-once for a single scheduled-style scan)
-dotnet run --project NetworkScanner.Service -- --run-once
+dotnet run --project KetworkScanner.Service -- --run-once
 
 # Tests (xUnit, Core only, no network needed except two loopback tests)
-dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj
-dotnet test NetworkScanner.Cli.Tests/NetworkScanner.Cli.Tests.csproj            # CLI parser / table renderer
-dotnet test NetworkScanner.Collector.Tests/NetworkScanner.Collector.Tests.csproj # collector (in-memory server)
+dotnet test KetworkScanner.Tests/KetworkScanner.Tests.csproj
+dotnet test KetworkScanner.Cli.Tests/KetworkScanner.Cli.Tests.csproj            # CLI parser / table renderer
+dotnet test KetworkScanner.Collector.Tests/KetworkScanner.Collector.Tests.csproj # collector (in-memory server)
 
 # A single test
-dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --filter "FullyQualifiedName~ScanEngineIntegrationTests"
+dotnet test KetworkScanner.Tests/KetworkScanner.Tests.csproj --filter "FullyQualifiedName~ScanEngineIntegrationTests"
 ```
 
 Tests set `UserDataPaths.OverrideRoot` and `AppSettingsStore.SecretStore` to temp locations and run **non-parallel** (`AssemblyInfo.cs`) because of that static state. Keep test-worthy logic in Core.
 
 ## Architecture
 
-**All real logic lives in `NetworkScanner.Core` (plain `net10.0`, no UI dependency). Core contains no `OperatingSystem.Is*`, `Process.Start` or `DllImport` outside the designated adapter files/folders: `Platform/` (ARP tables), `Secrets/` (credential stores), `Network/TtlProbe.cs` (ping utility for TTL), `Discovery/Infrastructure/` (neighbor tables, raw-socket ARP), `Capture/` (pcap), `Updates/` (self-update helper) and `UserDataPaths.cs` (per-OS data folder). `Network/NetworkProbes.cs` has one `IsWindows()` check for the ping TTL option. Do not add OS checks anywhere else.** The front-ends are thin adapters.
+**All real logic lives in `KetworkScanner.Core` (plain `net10.0`, no UI dependency). Core contains no `OperatingSystem.Is*`, `Process.Start` or `DllImport` outside the designated adapter files/folders: `Platform/` (ARP tables), `Secrets/` (credential stores), `Network/TtlProbe.cs` (ping utility for TTL), `Discovery/Infrastructure/` (neighbor tables, raw-socket ARP), `Capture/` (pcap), `Updates/` (self-update helper) and `UserDataPaths.cs` (per-OS data folder). `Network/NetworkProbes.cs` has one `IsWindows()` check for the ping TTL option. Do not add OS checks anywhere else.** The front-ends are thin adapters.
 
-- **`NetworkScanner.Core`**
+- **`KetworkScanner.Core`**
   - `ScanEngine` — the center. Two-phase range scan (parallel ping + TCP liveness → enrichment of alive hosts), single-host port checks, CSV load/save, change detection, history recording, report + upload.
   - `ScanServices` — the dependency bundle the engine uses: `IPinger`, `IPortProber`, `IHostNameResolver` (`Network/NetworkProbes.cs`), `IArpResolver` (`Platform/`), `UploadService` (`Upload/`), `ScanHistoryStore` (`History/`), `Clock`. `ScanServices.CreateDefault()` for apps, `CreateOffline(...)` + fakes for tests.
   - `ScanOptions` — timeouts, parallelism, `MaxTargets` safety cap. `ScanOptions.FromSettings(AppSettingsData)`.
@@ -65,11 +65,11 @@ Tests set `UserDataPaths.OverrideRoot` and `AppSettingsStore.SecretStore` to tem
   - `CsvCodec` — RFC 4180 + formula-injection guard. CSV columns are header-mapped, so old 9-column files still load.
   - `AppLogger` — daily rolling files in `<userdata>/logs`, `Sink` event for hosts to mirror to console/UI. No Windows EventLog.
   - `Localization` — all user-visible Core strings go through `Localization.T(key)` (en/ko). Do not add hardcoded Korean/English strings to Core.
-- **`NetworkScanner.Avalonia`** — the only GUI. `MainWindow` implements `IScanConfigProvider` by delegating to `SettingsView`. Views: IP list, Settings (upload/notifications/limits with `AppSettingsData.Validate()`), Ref. ports, History, User guide. `UpdateService` = Velopack + GitHub Releases.
-- **`NetworkScanner.Cli`** — `netscan`: scan (`--use-settings`, `--upload`, `--notify`, `--scheduled`, `--profile`, `-o csv` uses `ScanEngine.BuildCsv`, `-o pdf`) plus `history`, `assets` (incl. `delete`), `alerts`, `settings export|import`, `diag` and `update` subcommands. `CliOptions.Parse` validates ranges (IPv4 only, start <= end) and subcommand names; `CliScanOptions.Build` applies settings → `--profile` → explicit options. `--upload` without `--scheduled` writes the CSV to `env/` and sends it through `UploadService` itself. Progress → stderr (suppressed when not a terminal), results → stdout, exit codes 0/1/2/3/10. Tests: `NetworkScanner.Cli.Tests` (parser, `TableRenderer`; `InternalsVisibleTo`).
-- **`NetworkScanner.Service`** — `netscan-service`: `Microsoft.Extensions.Hosting` worker (Windows Service / systemd / launchd / foreground) running the schedule from `settings.json` with last-run catch-up. Unit/plist/PowerShell installers live in `deploy/`.
-- **`NetworkScanner.Collector`** — `netscan-collector`: ASP.NET Core minimal API that receives the scanners' HTTPS uploads (`POST /api/scan`, `/api/upload`, `/`; one Bearer token per site, optional admin token), stores files under `<DataDir>/sites/<site>/<yyyy>/<MM>/`, indexes them in `collector.db` (`uploads`, `scans`, `scan_hosts` incl. OS/model/service/switch port/approval; schema via `PRAGMA user_version` + add-column migration), parses CSVs with `ScanCsvParser` (header-mapped; system name taken from the engine's file naming), prunes each site to `ScansPerSite` scans + report files, and serves a JSON API (`/api/sites`, `/api/sites/{site}/scans[/{id}/hosts]`, `/api/uploads/{id}`) plus a cookie-session dashboard (`/login` form only — no `?token=`, per-IP login rate limit; `/`, `/sites/{site}`, `/reports/{id}`). Tests: `NetworkScanner.Collector.Tests` (WebApplicationFactory, temp data dir).
-- **`NetworkScanner.Tests`** — xUnit, references Core only. **`NetworkScanner.Cli.Tests`** — xUnit for the CLI parser/renderer.
+- **`KetworkScanner.Avalonia`** — the only GUI. `MainWindow` implements `IScanConfigProvider` by delegating to `SettingsView`. Views: IP list, Settings (upload/notifications/limits with `AppSettingsData.Validate()`), Ref. ports, History, User guide. `UpdateService` = Velopack + GitHub Releases.
+- **`KetworkScanner.Cli`** — `netscan`: scan (`--use-settings`, `--upload`, `--notify`, `--scheduled`, `--profile`, `-o csv` uses `ScanEngine.BuildCsv`, `-o pdf`) plus `history`, `assets` (incl. `delete`), `alerts`, `settings export|import`, `diag` and `update` subcommands. `CliOptions.Parse` validates ranges (IPv4 only, start <= end) and subcommand names; `CliScanOptions.Build` applies settings → `--profile` → explicit options. `--upload` without `--scheduled` writes the CSV to `env/` and sends it through `UploadService` itself. Progress → stderr (suppressed when not a terminal), results → stdout, exit codes 0/1/2/3/10. Tests: `KetworkScanner.Cli.Tests` (parser, `TableRenderer`; `InternalsVisibleTo`).
+- **`KetworkScanner.Service`** — `netscan-service`: `Microsoft.Extensions.Hosting` worker (Windows Service / systemd / launchd / foreground) running the schedule from `settings.json` with last-run catch-up. Unit/plist/PowerShell installers live in `deploy/`.
+- **`KetworkScanner.Collector`** — `netscan-collector`: ASP.NET Core minimal API that receives the scanners' HTTPS uploads (`POST /api/scan`, `/api/upload`, `/`; one Bearer token per site, optional admin token), stores files under `<DataDir>/sites/<site>/<yyyy>/<MM>/`, indexes them in `collector.db` (`uploads`, `scans`, `scan_hosts` incl. OS/model/service/switch port/approval; schema via `PRAGMA user_version` + add-column migration), parses CSVs with `ScanCsvParser` (header-mapped; system name taken from the engine's file naming), prunes each site to `ScansPerSite` scans + report files, and serves a JSON API (`/api/sites`, `/api/sites/{site}/scans[/{id}/hosts]`, `/api/uploads/{id}`) plus a cookie-session dashboard (`/login` form only — no `?token=`, per-IP login rate limit; `/`, `/sites/{site}`, `/reports/{id}`). Tests: `KetworkScanner.Collector.Tests` (WebApplicationFactory, temp data dir).
+- **`KetworkScanner.Tests`** — xUnit, references Core only. **`KetworkScanner.Cli.Tests`** — xUnit for the CLI parser/renderer.
 - **`data/`** — `ouiinfo.ini` (raw IEEE `oui.txt`; refresh with `tools/update-oui.sh`), `reservedports.ini`, `prohibitports.ini`; linked into the GUI/CLI/service outputs. **`assets/`** — icon and toolbar images.
 
 ### Events and threading (read before touching the scan loop)
@@ -86,7 +86,7 @@ The engine reports through events; UI handlers marshal to the UI thread: `Messag
 
 - IPv4 math uses `uint32` (`IPRangeUtil`); never last-octet math.
 - Use `CultureInfo.InvariantCulture` for anything persisted; UTF-8 without BOM for files; case-insensitive file matching (`EnumerationOptions`).
-- `UserDataPaths` → `%APPDATA%\NetworkScanner` (Windows), `~/Library/Application Support/NetworkScanner` (macOS, .NET 10 mapping; old `~/.config/NetworkScanner` is migrated), `~/.config/NetworkScanner` (Linux); contents: settings.json, history.db (schema v3: facts, os_version, model, switch_port), env/, outbox/, logs/, secrets/, backups/, known_hosts (settings.json, history.db, env/, outbox/, logs/, secrets/, known_hosts). Tests override `UserDataPaths.OverrideRoot`.
+- `UserDataPaths` → `%APPDATA%\KetworkScanner` (Windows), `~/Library/Application Support/KetworkScanner` (macOS, .NET 10 mapping; old `~/.config/KetworkScanner` is migrated), `~/.config/KetworkScanner` (Linux); contents: settings.json, history.db (schema v3: facts, os_version, model, switch_port), env/, outbox/, logs/, secrets/, backups/, known_hosts (settings.json, history.db, env/, outbox/, logs/, secrets/, known_hosts). Tests override `UserDataPaths.OverrideRoot`.
 - A UI-facing change usually needs a matching CLI option; put the logic in Core so it is tested once.
 
 ## Releases

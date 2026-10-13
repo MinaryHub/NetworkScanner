@@ -1,9 +1,9 @@
 # Windows 서비스 제거 (관리자 PowerShell에서 실행). 설치 파일과 설정/데이터 폴더는 남긴다.
 #   .\uninstall-windows-service.ps1
-#   .\uninstall-windows-service.ps1 -ServiceName NetworkScanner
+#   .\uninstall-windows-service.ps1 -ServiceName KetworkScanner
 [CmdletBinding()]
 param(
-    [string]$ServiceName = "NetworkScanner"
+    [string]$ServiceName = "KetworkScanner"
 )
 
 $ErrorActionPreference = "Stop"

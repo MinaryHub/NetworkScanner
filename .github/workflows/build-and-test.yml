@@ -24,20 +24,20 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Build solution
-        run: dotnet build NetworkScanner.sln --configuration Release
+        run: dotnet build KetworkScanner.sln --configuration Release
       - name: Test Core
-        run: dotnet test NetworkScanner.Tests/NetworkScanner.Tests.csproj --configuration Release --no-build
+        run: dotnet test KetworkScanner.Tests/KetworkScanner.Tests.csproj --configuration Release --no-build
       - name: Test CLI
-        run: dotnet test NetworkScanner.Cli.Tests/NetworkScanner.Cli.Tests.csproj --configuration Release --no-build
+        run: dotnet test KetworkScanner.Cli.Tests/KetworkScanner.Cli.Tests.csproj --configuration Release --no-build
       - name: Test collector
         if: runner.os == 'Linux'
-        run: dotnet test NetworkScanner.Collector.Tests/NetworkScanner.Collector.Tests.csproj --configuration Release --no-build
+        run: dotnet test KetworkScanner.Collector.Tests/KetworkScanner.Collector.Tests.csproj --configuration Release --no-build
       # 알려진 취약점이 있는 패키지를 쓰면 실패시킨다.
       - name: Check vulnerable packages
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          out=$(dotnet list NetworkScanner.sln package --vulnerable --include-transitive 2>&1)
+          out=$(dotnet list KetworkScanner.sln package --vulnerable --include-transitive 2>&1)
           echo "$out"
           if echo "$out" | grep -qi "has the following vulnerable packages"; then exit 1; fi
 
@@ -75,15 +75,15 @@ jobs:
         include:
           - os: windows-latest
             rid: win-x64
-            mainExe: NetworkScanner.Avalonia.exe
+            mainExe: KetworkScanner.Avalonia.exe
             icon: assets/app.ico
           - os: macos-latest
             rid: osx-arm64
-            mainExe: NetworkScanner.Avalonia
+            mainExe: KetworkScanner.Avalonia
             icon: assets/app.icns
           - os: ubuntu-latest
             rid: linux-x64
-            mainExe: NetworkScanner.Avalonia
+            mainExe: KetworkScanner.Avalonia
             icon: assets/app.png
     runs-on: ${{ matrix.os }}
     steps:
@@ -93,7 +93,7 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Publish self-contained (${{ matrix.rid }})
         run: >
-          dotnet publish NetworkScanner.Avalonia/NetworkScanner.Avalonia.csproj
+          dotnet publish KetworkScanner.Avalonia/KetworkScanner.Avalonia.csproj
           -c Release -r ${{ matrix.rid }} --self-contained true
           -o publish/${{ matrix.rid }}
       - name: Install Velopack CLI
@@ -107,13 +107,13 @@ jobs:
       - name: Package with Velopack (${{ matrix.rid }})
         shell: bash
         run: >
-          vpk pack --packId NetworkScanner --packVersion "1.0.${{ github.run_number }}"
+          vpk pack --packId KetworkScanner --packVersion "1.0.${{ github.run_number }}"
           --packDir "publish/${{ matrix.rid }}" --mainExe "${{ matrix.mainExe }}"
-          --packTitle "Network Scanner" --packAuthors SMIC
+          --packTitle "Ketwork Scanner" --packAuthors SMIC
           --runtime ${{ matrix.rid }} --outputDir "release-packages/${{ matrix.rid }}"
           ${{ matrix.icon != '' && format('--icon {0}', matrix.icon) || '' }}
       - name: Upload packaged installer
         uses: actions/upload-artifact@v4
         with:
-          name: NetworkScanner-${{ matrix.rid }}-installer
+          name: KetworkScanner-${{ matrix.rid }}-installer
           path: release-packages/${{ matrix.rid }}

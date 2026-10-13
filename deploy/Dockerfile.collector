@@ -8,12 +8,12 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG VERSION=2.1.0
 WORKDIR /src
 COPY . .
-RUN dotnet publish NetworkScanner.Collector/NetworkScanner.Collector.csproj -c Release -p:Version=${VERSION} -o /out
+RUN dotnet publish KetworkScanner.Collector/KetworkScanner.Collector.csproj -c Release -p:Version=${VERSION} -o /out
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 ARG VERSION=2.1.0
 LABEL org.opencontainers.image.title="netscan-collector" \
-      org.opencontainers.image.description="NetworkScanner central report collector" \
+      org.opencontainers.image.description="KetworkScanner central report collector" \
       org.opencontainers.image.version="${VERSION}"
 # aspnet 이미지에는 curl이 없어 HEALTHCHECK 용으로 설치한다(/healthz).
 RUN apt-get update \
