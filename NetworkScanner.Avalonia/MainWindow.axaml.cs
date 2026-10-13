@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NetworkScanner.Alerts;
@@ -91,6 +92,7 @@ public partial class MainWindow : Window, IScanConfigProvider
         }
 
         InitUpdates(startup);
+        InitReferenceData(startup);
         _ = FlushOutboxAsync();
         if (!startup.UsageNoticeAccepted) _ = ShowUsageNoticeAsync();
     }
@@ -351,6 +353,77 @@ public partial class MainWindow : Window, IScanConfigProvider
         }
     }
 
+    // ---- 참조 데이터 자동 갱신(참고 포트 목록·OUI·취약점 규칙) ----
+    // 시작 시와 설정 주기마다 저장소의 data/refdata.json을 확인해 새 파일을 사용자 폴더에 내려받고, 목록/테이블/규칙을 다시 읽는다.
+    private NetworkScanner.Updates.ReferenceDataUpdater _refData = new();
+    private bool _refDataBusy;
+
+    private static NetworkScanner.Updates.ReferenceDataUpdater CreateRefDataUpdater(AppSettingsData s)
+        => new(string.IsNullOrWhiteSpace(s.ReferenceData.SourceUrl)
+            ? NetworkScanner.Updates.ReferenceDataUpdater.DefaultSourceUrl(s.Update.Repository)
+            : s.ReferenceData.SourceUrl);
+
+    private void InitReferenceData(AppSettingsData settings)
+    {
+        _refData = CreateRefDataUpdater(settings);
+        _refPortListView.UpdateRequested += () => _ = CheckReferenceDataAsync(force: true);
+        _settingsView.SettingsSaved += data => _refData = CreateRefDataUpdater(data);
+        RenderReferenceDataStatus(null);
+        if (settings.ReferenceData.AutoUpdate) _ = CheckReferenceDataAsync(force: false);
+    }
+
+    private async System.Threading.Tasks.Task CheckReferenceDataAsync(bool force)
+    {
+        if (_refDataBusy) return;
+        _refDataBusy = true;
+        _refPortListView.SetBusy(true);
+        AppSettingsData settings = _settingsView.GetCurrentSettings();
+        try
+        {
+            _refPortListView.ShowStatus(Localization.T("refdata.checking"));
+            var result = await _refData.CheckAndUpdateAsync(force, TimeSpan.FromHours(Math.Max(1, settings.ReferenceData.CheckIntervalHours)));
+            if (result.Error != null)
+            {
+                AppLogger.LogWarn("RefData", "check failed: " + result.Error);
+                RenderReferenceDataStatus(string.Format(Localization.T("refdata.failed"), result.Error));
+                return;
+            }
+            if (result.Changed)
+            {
+                _refPortListView.LoadInfo();
+                _ipListView.ReloadReferenceData();
+                NetworkScanner.Vulnerability.RuleEngine.Reload();
+                string names = string.Join(", ", result.Updated.Select(f => NetworkScanner.Updates.ReferenceDataUpdater.Label(f.Name) + " " + f.Version));
+                AppLogger.LogInfo("RefData", "updated: " + names);
+                RenderReferenceDataStatus(string.Format(Localization.T("refdata.updated"), names));
+            }
+            else RenderReferenceDataStatus(result.Checked ? Localization.T("refdata.uptodate") : null);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.LogWarn("RefData", "check failed: " + ex.Message);
+            RenderReferenceDataStatus(string.Format(Localization.T("refdata.failed"), ex.Message));
+        }
+        finally
+        {
+            _refDataBusy = false;
+            _refPortListView.SetBusy(false);
+        }
+    }
+
+    private void RenderReferenceDataStatus(string? message)
+    {
+        string line = NetworkScanner.Updates.ReferenceDataUpdater.Describe();
+        _refPortListView.ShowStatus(message == null ? line : message + "  ·  " + line);
+    }
+
+    private void TickReferenceDataCheck(AppSettingsData settings)
+    {
+        if (!settings.ReferenceData.AutoUpdate || _refDataBusy) return;
+        if (!_refData.IsDue(TimeSpan.FromHours(Math.Max(1, settings.ReferenceData.CheckIntervalHours)))) return;
+        _ = CheckReferenceDataAsync(force: false);
+    }
+
     // 1분 타이머에서 호출: 설정된 주기마다 자동 확인.
     private void TickUpdateCheck(AppSettingsData settings, DateTime now)
     {
@@ -367,6 +440,7 @@ public partial class MainWindow : Window, IScanConfigProvider
         AppSettingsData settings = _settingsView.GetCurrentSettings();
         DateTime now = DateTime.Now;
         TickUpdateCheck(settings, now);
+        TickReferenceDataCheck(settings);
 
         // 연속 모니터링: 지정한 분 간격마다 자동 재스캔(스케줄링과 독립적으로 동작).
         if (settings.ContinuousMonitoring

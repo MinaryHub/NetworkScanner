@@ -38,6 +38,9 @@
     <None Include="..\data\reservedports.ini" Link="reservedports.ini">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="..\data\refdata.json" Link="refdata.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\data\vulnrules.json" Link="vulnrules.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

@@ -3,7 +3,7 @@ using NetworkScanner;
 namespace NetworkScanner.Cli;
 
 internal enum OutputFormat { Table, Json, Csv, Html, Pdf }
-internal enum CliCommand { Scan, History, Assets, Alerts, Settings, Diag, Update }
+internal enum CliCommand { Scan, History, Assets, Alerts, Settings, Diag, Update, RefData }
 
 // 명령행 옵션 파서. 최소한의 GNU 스타일 --옵션만 다룬다.
 internal sealed class CliOptions
@@ -49,6 +49,7 @@ internal sealed class CliOptions
         [CliCommand.Alerts] = new[] { "", "list", "ack", "snooze", "reopen" },
         [CliCommand.Settings] = new[] { "", "export", "import" },
         [CliCommand.Update] = new[] { "", "check", "apply" },
+        [CliCommand.RefData] = new[] { "", "check", "update" },
     };
 
     private static readonly Dictionary<CliCommand, string> SubUsage = new()
@@ -57,15 +58,16 @@ internal sealed class CliOptions
         [CliCommand.Alerts] = "list|ack <id>|snooze <id> [hours]|reopen <id>",
         [CliCommand.Settings] = "export <file>|import <file>",
         [CliCommand.Update] = "check|apply",
+        [CliCommand.RefData] = "check|update",
     };
 
     public static CliOptions Parse(string[] args)
     {
         var o = new CliOptions();
         int start = 0;
-        if (args.Length > 0 && args[0] is "assets" or "alerts" or "settings" or "diag" or "update")
+        if (args.Length > 0 && args[0] is "assets" or "alerts" or "settings" or "diag" or "update" or "refdata")
         {
-            o.Command = args[0] switch { "assets" => CliCommand.Assets, "alerts" => CliCommand.Alerts, "settings" => CliCommand.Settings, "update" => CliCommand.Update, _ => CliCommand.Diag };
+            o.Command = args[0] switch { "assets" => CliCommand.Assets, "alerts" => CliCommand.Alerts, "settings" => CliCommand.Settings, "update" => CliCommand.Update, "refdata" => CliCommand.RefData, _ => CliCommand.Diag };
             start = 1;
             if (args.Length > 1 && !args[1].StartsWith('-')) { o.Sub = args[1]; start = 2; }
             while (start < args.Length && !args[start].StartsWith('-')) o.Args.Add(args[start++]);
@@ -317,6 +319,7 @@ USAGE:
   netscan settings [export <file>|import <file>]
   netscan diag [<zip path>]                  create a support/diagnostic bundle
   netscan update [check|apply] [--beta] [-y]  self-update the headless binaries from GitHub Releases
+  netscan refdata [check|update]             refresh the reference data (port lists, OUI, vulnerability rules)
 
 SCAN OPTIONS:
   --range <CIDR|start-end|ip>   IPv4 range to scan (repeatable). Examples:

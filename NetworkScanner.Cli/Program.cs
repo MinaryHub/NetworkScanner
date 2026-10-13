@@ -55,6 +55,7 @@ switch (options.Command)
     case CliCommand.Settings: return RunSettings(options);
     case CliCommand.Diag: return RunDiag(options);
     case CliCommand.Update: return await RunUpdateAsync(options);
+    case CliCommand.RefData: return await RunRefDataAsync(options);
 }
 
 // 스캔 대역 결정: --range → settings.json → 로컬 서브넷 자동 감지 순.
@@ -77,6 +78,21 @@ if (ranges.Count == 0)
     }
     ranges.AddItem(local);
     Console.Error.WriteLine($"info: no --range given; using detected local subnet {local.StartIP} ~ {local.EndIP}");
+}
+
+// 참조 데이터 자동 갱신(설정에 켜져 있고 주기가 지났을 때만). 실패해도 스캔은 번들/기존 데이터로 계속한다.
+if (saved != null && saved.ReferenceData.AutoUpdate)
+{
+    try
+    {
+        using var refCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var refResult = await CreateRefDataUpdater(saved).CheckAndUpdateAsync(false, TimeSpan.FromHours(Math.Max(1, saved.ReferenceData.CheckIntervalHours)), refCts.Token);
+        if (refResult.Changed && !options.Quiet)
+            Console.Error.WriteLine("info: reference data updated: " + string.Join(", ", refResult.Updated.Select(f => f.Name + " " + f.Version)));
+        else if (refResult.Error != null && !options.Quiet)
+            Console.Error.WriteLine("warn: reference data check failed: " + refResult.Error);
+    }
+    catch (Exception ex) { if (!options.Quiet) Console.Error.WriteLine("warn: reference data check failed: " + ex.Message); }
 }
 
 var oui = new OUIInfo();
@@ -421,6 +437,50 @@ static int RunSettings(CliOptions o)
     catch (Exception ex) { Console.Error.WriteLine("error: " + ex.Message); return 1; }
     Console.Error.WriteLine("error: settings export <file> | import <file>");
     return 2;
+}
+
+static NetworkScanner.Updates.ReferenceDataUpdater CreateRefDataUpdater(AppSettingsData s)
+    => new(string.IsNullOrWhiteSpace(s.ReferenceData.SourceUrl)
+        ? NetworkScanner.Updates.ReferenceDataUpdater.DefaultSourceUrl(s.Update.Repository)
+        : s.ReferenceData.SourceUrl);
+
+// netscan refdata [check|update] — 저장소의 data/refdata.json과 비교해 참고 포트 목록·OUI·취약점 규칙을 사용자 폴더에 내려받는다.
+// check: 현재 버전과 원격 버전만 출력(변경 없음). update(기본): 새 파일을 내려받아 적용. 종료 코드 10 = check에서 새 데이터 있음.
+static async Task<int> RunRefDataAsync(CliOptions o)
+{
+    AppSettingsData settings;
+    try { settings = AppSettingsStore.LoadSettings(); } catch { settings = new AppSettingsData(); }
+    var updater = CreateRefDataUpdater(settings);
+    Console.Error.WriteLine("info: source " + updater.SourceUrl);
+    Console.Error.WriteLine("info: " + NetworkScanner.Updates.ReferenceDataUpdater.Describe());
+    try
+    {
+        if (o.Sub == "check")
+        {
+            using var http = NetworkScanner.Updates.GitHubReleases.CreateClient();
+            string json = await http.GetStringAsync(updater.SourceUrl + NetworkScanner.Updates.ReferenceDataUpdater.ManifestFileName);
+            var remote = NetworkScanner.Updates.ReferenceManifest.Parse(json);
+            if (remote == null) { Console.Error.WriteLine("error: invalid manifest"); return 1; }
+            var current = NetworkScanner.Updates.ReferenceDataUpdater.EffectiveVersions().ToDictionary(f => f.Name, f => f, StringComparer.OrdinalIgnoreCase);
+            int newer = 0;
+            foreach (var f in remote.Files)
+            {
+                current.TryGetValue(f.Name, out var cur);
+                bool isNew = cur == null || !string.Equals(cur.Sha256, f.Sha256, StringComparison.OrdinalIgnoreCase) && string.CompareOrdinal(f.Version, cur.Version) >= 0;
+                if (isNew) newer++;
+                Console.WriteLine($"{f.Name,-20} local {cur?.Version ?? "-",-10} remote {f.Version,-10} {(isNew ? "NEW" : "ok")}");
+            }
+            return newer > 0 ? 10 : 0;
+        }
+
+        var result = await updater.CheckAndUpdateAsync(force: true, TimeSpan.Zero, CancellationToken.None);
+        if (result.Error != null) { Console.Error.WriteLine("error: " + result.Error); return 1; }
+        foreach (string skip in result.Skipped) Console.Error.WriteLine("warn: " + skip);
+        if (result.Changed) Console.Error.WriteLine("info: updated " + string.Join(", ", result.Updated.Select(f => f.Name + " " + f.Version)));
+        else Console.Error.WriteLine("info: reference data is up to date");
+        return result.Skipped.Count > 0 ? 1 : 0;
+    }
+    catch (Exception ex) { Console.Error.WriteLine("error: " + ex.Message); return 1; }
 }
 
 // netscan update [check|apply] — 현재 RID용 압축본을 받아 SHA256SUMS.txt로 검증한 뒤 설치 폴더에 적용한다.

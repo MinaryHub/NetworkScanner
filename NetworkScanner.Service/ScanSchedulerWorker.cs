@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Globalization;
 using NetworkScanner.Notifications;
 using NetworkScanner.Updates;
@@ -70,6 +71,7 @@ public sealed class ScanSchedulerWorker : BackgroundService
         DateTime lastScheduledHour = ReadLastRun();
         DateTime lastMonitor = DateTime.MinValue;
         DateTime lastUpdateCheck = DateTime.MinValue;
+        DateTime lastRefDataCheck = DateTime.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -94,6 +96,13 @@ public sealed class ScanSchedulerWorker : BackgroundService
                 {
                     await RunScanAsync(stoppingToken, scheduled: false, settings);
                     lastMonitor = DateTime.Now;
+                }
+
+                // 참조 데이터(포트 목록·OUI·취약점 규칙): 설정 주기마다 저장소와 비교해 새 파일을 내려받는다. 다음 스캔부터 반영된다.
+                if (settings != null && settings.ReferenceData.AutoUpdate && (now - lastRefDataCheck).TotalMinutes >= 60)
+                {
+                    lastRefDataCheck = now;
+                    await RefreshReferenceDataAsync(settings, stoppingToken);
                 }
 
                 // 자동 업데이트: 주기마다 확인하고(스캔 중이 아닐 때), 설정에 따라 내려받아 설치 후 재시작한다.
@@ -132,6 +141,26 @@ public sealed class ScanSchedulerWorker : BackgroundService
             _lastSettingsProblem = joined;
         }
         return null;
+    }
+
+    private async Task RefreshReferenceDataAsync(AppSettingsData settings, CancellationToken ct)
+    {
+        try
+        {
+            var updater = new ReferenceDataUpdater(string.IsNullOrWhiteSpace(settings.ReferenceData.SourceUrl)
+                ? ReferenceDataUpdater.DefaultSourceUrl(settings.Update.Repository)
+                : settings.ReferenceData.SourceUrl);
+            var result = await updater.CheckAndUpdateAsync(false, TimeSpan.FromHours(Math.Max(1, settings.ReferenceData.CheckIntervalHours)), ct);
+            if (result.Error != null) _log.LogWarning("reference data check failed: {Error}", result.Error);
+            foreach (string skip in result.Skipped) _log.LogWarning("reference data: {Skip}", skip);
+            if (result.Changed)
+            {
+                NetworkScanner.Vulnerability.RuleEngine.Reload();
+                _log.LogInformation("reference data updated: {Files}", string.Join(", ", result.Updated.Select(f => f.Name + " " + f.Version)));
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { _log.LogWarning("reference data check failed: {Error}", ex.Message); }
     }
 
     // 새 버전을 확인하고(설정에 따라) 내려받아 적용한다. 적용했으면 true를 돌려주고 호출자는 프로세스를 끝낸다:

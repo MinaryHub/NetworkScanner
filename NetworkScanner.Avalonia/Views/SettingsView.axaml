@@ -276,6 +276,12 @@
                         <Button Name="BtnUpdateCheck" Classes="accentoutline" Click="BtnUpdateCheck_Click" Content="{l:Tr Key=settings.update.checknow}" />
                     </WrapPanel>
                     <TextBlock Name="TbUpdateStatus" Classes="caption" />
+                    <!-- 참조 데이터(참고 포트 목록·OUI·취약점 규칙) 자동 갱신: 저장소의 data/refdata.json과 비교해 새 파일만 내려받는다. -->
+                    <WrapPanel>
+                        <CheckBox Name="ChkRefDataAuto" Content="{l:Tr Key=settings.refdata.auto}" Margin="0,0,16,0" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{l:Tr Key=settings.refdata.interval}" />
+                        <TextBox Name="TbRefDataInterval" Width="60" Classes="mono" />
+                    </WrapPanel>
                 </StackPanel>
             </Border>
 

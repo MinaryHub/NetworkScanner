@@ -41,6 +41,7 @@ The `*.nupkg`, `RELEASES*`, `assets.*.json` and `releases.*.json` files are Velo
 - Hourly scheduling and continuous monitoring, in the GUI or as a background service
 - Secrets stored in the OS credential store (DPAPI / Keychain / libsecret) or an AES-256-GCM encrypted file — never in plain text
 - CIDR range input, per-column sort, search / alive-only filter, Wake-on-LAN, in-app updates
+- Reference data (IANA port list, backdoor port list, IEEE OUI tables, vulnerability rules) refreshed automatically from the repository, verified by SHA-256
 
 ## Project structure
 
@@ -97,6 +98,7 @@ netscan assets [list|approve <ip…>|unapprove <ip…>|set <ip> --owner X --tags
 netscan alerts [list|ack <id>|snooze <id> [hours]|reopen <id>] [--note <text>] [--all]
 netscan settings export|import <file>      netscan diag [zip]
 netscan update [check|apply] [--beta] [-y]  # exit 10 = update available (check)
+netscan refdata [check|update]              # refresh port lists / OUI / vulnerability rules (exit 10 = newer data, check)
 ```
 
 Progress goes to stderr (suppressed when stderr is not a terminal or with `-q`), results to stdout (safe to pipe). Exit codes: `0` ok, `1` error or declined confirmation, `2` bad arguments, `3` scan succeeded but risky ports were found, `10` `update check` found a newer version.
@@ -147,9 +149,10 @@ User data lives in a per-user folder that survives updates: `%APPDATA%\NetworkSc
 | `env/` | Saved CSV results and HTML reports |
 | `outbox/` | Uploads waiting to be retried |
 | `logs/` | Daily log files (14 days kept) |
+| `data/` | Reference data downloaded by the automatic refresh (`reservedports.ini`, `prohibitports.ini`, `vulnrules.json`, `ouiinfo*.ini`) plus `refdata.json` with their versions and the last check time. A newer bundled copy (after an app update) takes precedence. |
 | `known_hosts` | Pinned SFTP host keys. (Per-IP notes typed into the IP list are stored in `history.db`; an old `annotations.ini` is imported once and renamed `*.migrated`.) |
 
-The bundled reference files (`ouiinfo.ini`, `reservedports.ini`, `prohibitports.ini`) are resolved next to the executable.
+The bundled reference files (`ouiinfo*.ini`, `reservedports.ini`, `prohibitports.ini`, `vulnrules.json`, `refdata.json`) are resolved next to the executable. **Automatic refresh** (Settings → Updates, on by default, every 24 h): the app, CLI (`netscan refdata`, and before a scan with `--use-settings`) and service compare `data/refdata.json` in the GitHub repository with the files in use and download only the ones that changed, verifying size and SHA-256 and sanity-checking the content before swapping them in. The repository itself is refreshed weekly by the *Refresh reference data* workflow (`tools/update-ports.sh` from the IANA registry, `tools/update-oui.sh` from IEEE, `tools/refdata-manifest.sh`). The Ref. Ports screen shows the data versions and has an *Update now* button; `ReferenceData.SourceUrl` in `settings.json` points at a mirror.
 
 ## Upload and notifications
 

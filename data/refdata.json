@@ -1,0 +1,41 @@
+{
+  "generated": "2026-10-13",
+  "files": [
+    {
+      "name": "reservedports.ini",
+      "version": "2026-10-13",
+      "sha256": "a5e2a33da2e0342080ba70cbd898b3cab412a877226540c8fab162bd6ad7fcb5",
+      "size": 184933
+    },
+    {
+      "name": "prohibitports.ini",
+      "version": "2026-10-13",
+      "sha256": "fa305f35f87a996baba72c3e1a07a85b51d4303031c23633d6791fee22ca8598",
+      "size": 2679
+    },
+    {
+      "name": "vulnrules.json",
+      "version": "2026-10-13",
+      "sha256": "33037d27fa54a64dcfa4a9cc69155f97f3449caf3868d069528d1335596ca9d7",
+      "size": 36372
+    },
+    {
+      "name": "ouiinfo.ini",
+      "version": "2026-10-13",
+      "sha256": "02ed95731b90d10d49b9ecbdf5922d7c28b252b2fdcc945e5a2056a8383435fc",
+      "size": 6619606
+    },
+    {
+      "name": "ouiinfo-mam.ini",
+      "version": "2026-10-13",
+      "sha256": "120266f03c139ab4370aac3a03d5bb7127a8224ab8117d9d485b562abc17c153",
+      "size": 1269744
+    },
+    {
+      "name": "ouiinfo-mas.ini",
+      "version": "2026-10-13",
+      "sha256": "a05b2f9c567b23088f4e454b837a51114dc947fa840ea4a44f2f579de3737662",
+      "size": 1185172
+    }
+  ]
+}

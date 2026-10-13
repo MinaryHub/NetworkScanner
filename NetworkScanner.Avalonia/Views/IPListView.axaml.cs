@@ -263,6 +263,9 @@ namespace NetworkScanner.Avalonia.Views
         }
 
         // 설정 저장 후 동시성/상한을 바꿔 적용한다(진행 중인 스캔에는 영향 없음, 다음 스캔부터).
+        // 참조 데이터(OUI)가 갱신되면 제조사 테이블을 다시 읽는다. 포트 목록은 RefPortListView가, 취약점 규칙은 RuleEngine.Reload()가 맡는다.
+        public void ReloadReferenceData() => _oui.LoadInfo();
+
         public void ApplyOptions(ScanOptions options)
         {
             if (_engine != null) _engine.Options = options;

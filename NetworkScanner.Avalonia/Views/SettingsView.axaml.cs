@@ -167,6 +167,8 @@ namespace NetworkScanner.Avalonia.Views
             ChkUpdateAutoApply.IsChecked = data.Update.AutoApply;
             ChkUpdatePrerelease.IsChecked = data.Update.IncludePrerelease;
             TbUpdateInterval.Text = data.Update.CheckIntervalHours.ToString();
+            ChkRefDataAuto.IsChecked = data.ReferenceData.AutoUpdate;
+            TbRefDataInterval.Text = data.ReferenceData.CheckIntervalHours.ToString();
             UpdateUpdateToggles();
         }
 
@@ -263,6 +265,12 @@ namespace NetworkScanner.Avalonia.Views
                     AutoApply = ChkUpdateAutoApply.IsChecked == true,
                     IncludePrerelease = ChkUpdatePrerelease.IsChecked == true,
                     CheckIntervalHours = ParseInt(TbUpdateInterval.Text),
+                },
+                ReferenceData = new ReferenceDataSettings
+                {
+                    AutoUpdate = ChkRefDataAuto.IsChecked == true,
+                    CheckIntervalHours = ParseInt(TbRefDataInterval.Text),
+                    SourceUrl = _loaded.ReferenceData.SourceUrl,
                 },
                 HistoryBackupsToKeep = ParseInt(TbBackups.Text),
             };

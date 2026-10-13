@@ -2,6 +2,9 @@
 
 ## Unreleased (2.1.0) — commercial feature set
 
+### Added (reference data)
+- **Automatic reference-data refresh**: the reserved/backdoor port lists, OUI tables and vulnerability rules are compared with `data/refdata.json` in the repository at startup and every 24 h (configurable, Settings → Updates) and newer files are downloaded into the user data folder after SHA-256 and content checks; the Ref. Ports screen shows versions and offers *Update now*; `netscan refdata [check|update]`; the service refreshes too. A weekly workflow regenerates the port list from the IANA registry (6,000+ TCP ports, hand-added trojan ports kept) and the OUI tables from IEEE.
+
 ### Changed (clean-up round)
 - Updates: the release feed now points at the moved repository (`MinaryHub/NetworkScanner`); portable/development builds check for new versions too and open the release page; `Update.Repository` overrides the source for all three updaters.
 - Settings: the "Device identification" and "Deep discovery" groups are one card (Names / Fingerprints / Network rows, one SNMP community); vulnerability assessment sits next to the port settings; the duplicate profile selector, the duplicate History backup button and the fixed 90-day prune are gone (prune uses the retention setting); hours are labelled 00–23; a hint shows when discovery changes need a restart.

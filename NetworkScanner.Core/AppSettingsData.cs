@@ -65,6 +65,7 @@ namespace NetworkScanner
 
         // 자동 업데이트(GUI는 Velopack, CLI/서비스는 GitHub 릴리스 압축본).
         public UpdateSettings Update { get; set; } = new UpdateSettings();
+        public ReferenceDataSettings ReferenceData { get; set; } = new ReferenceDataSettings();
 
         // 이력 보존 일수(0 = 무제한)와 자동 백업 보관 개수.
         public int HistoryRetentionDays { get; set; } = 180;
@@ -101,6 +102,7 @@ namespace NetworkScanner
                 errors.Add(Localization.T("settings.invalid.renotify"));
             if (HistoryRetentionDays < 0) errors.Add(Localization.T("settings.invalid.retention"));
             if (Update.CheckIntervalHours < 1 || Update.CheckIntervalHours > 168) errors.Add(Localization.T("settings.invalid.updateinterval"));
+            if (ReferenceData.CheckIntervalHours < 1 || ReferenceData.CheckIntervalHours > 720) errors.Add(Localization.T("settings.invalid.refdatainterval"));
 
             var (_, invalidAllow) = RiskPolicy.ParseAllowList(RiskAllowList);
             if (invalidAllow.Count > 0)
@@ -137,6 +139,14 @@ namespace NetworkScanner
         public int CheckIntervalHours { get; set; } = 6;
         // 릴리스를 읽을 GitHub 저장소("owner/name"). 비우면 기본 저장소. 포크나 사내 미러용.
         public string Repository { get; set; } = "";
+    }
+
+    // 참조 데이터(참고 포트 목록, OUI, 취약점 규칙) 자동 갱신. SourceUrl이 비면 Update.Repository(기본 저장소)의 data/ 폴더.
+    public sealed class ReferenceDataSettings
+    {
+        public bool AutoUpdate { get; set; } = true;
+        public int CheckIntervalHours { get; set; } = 24;
+        public string SourceUrl { get; set; } = "";
     }
 
     public sealed class AssetPolicySettings

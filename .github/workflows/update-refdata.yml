@@ -1,0 +1,31 @@
+name: Refresh reference data
+
+# 매주 IANA 포트 레지스트리와 IEEE OUI 테이블을 받아 data/ 를 갱신하고 refdata.json(버전·SHA-256)을 다시 만든다.
+# 설치된 앱/CLI/서비스는 이 매니페스트를 보고 번들보다 새 파일만 내려받는다(ReferenceDataUpdater).
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update port list from IANA
+        run: sh tools/update-ports.sh
+      - name: Update OUI tables from IEEE
+        run: sh tools/update-oui.sh
+      - name: Rebuild manifest
+        run: sh tools/refdata-manifest.sh
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -m "Refresh reference data (IANA ports, IEEE OUI)"
+          git push

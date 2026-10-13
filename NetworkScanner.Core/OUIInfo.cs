@@ -23,8 +23,10 @@ namespace NetworkScanner
 
         public int Count => _mal.Count + _mam.Count + _mas.Count;
 
+        // 참조 데이터가 갱신되면 다시 호출해도 된다(테이블을 비우고 새로 읽는다).
         public void LoadInfo()
         {
+            lock (_mal) { _mal.Clear(); _mam.Clear(); _mas.Clear(); }
             LoadFile(MalFileName, _mal, 0, required: true);
             LoadFile(MamFileName, _mam, 1, required: false);
             LoadFile(MasFileName, _mas, 3, required: false);
