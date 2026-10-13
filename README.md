@@ -191,6 +191,10 @@ Pushing a `v*.*.*` tag runs `.github/workflows/release.yml`, which runs the test
 - Scanning is IPv4 only; IPv6 addresses are only recorded when mDNS or the neighbour tables reveal them.
 - The passive listener needs libpcap (Linux/macOS) or Npcap (Windows) and capture privileges; without them it reports itself unavailable and the scan continues without it. Active ARP sweeps are Linux-only.
 
+## Privacy
+
+See [PRIVACY.md](PRIVACY.md): scan data stays on your computer; only the uploads/notifications you configure and the update/reference-data checks against GitHub leave it.
+
 ## License
 
 See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for bundled components. The license for KetworkScanner itself is defined by the repository owner (`LICENSE`).
