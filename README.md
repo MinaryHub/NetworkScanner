@@ -173,6 +173,12 @@ vpk pack --packId KetworkScanner --packVersion 2.0.0 --packDir publish/osx-arm64
 
 `vpk` packages only for the OS it runs on. On Windows add `--mainExe KetworkScanner.Avalonia.exe --icon assets/app.ico`. Channels: `win`, `win-arm64`, `osx`, `osx-x64`, `linux`, `linux-arm64`.
 
+## Microsoft Store (MSIX)
+
+`tools/build-msix.ps1` (Windows, needs the Windows SDK for `makeappx`/`signtool`) and `tools/build-msix.sh` (macOS/Linux with the open-source [MSIX SDK](https://github.com/microsoft/msix-packaging) `makemsix`) publish the GUI with `-p:StoreBuild=true` (Velopack self-update disabled, the Store updates the app), add the logo set from `KetworkScanner.Avalonia/Package/Assets/` and the manifest template `Package/AppxManifest.xml`, and produce `KetworkScanner-<version>.0-<arch>.msix` (plus an `.msixbundle` with `-Bundle`). The release workflow builds x64 + arm64 and a bundle on every tag (job *MSIX (Store)*).
+
+Before the first Store submission set the identity values from Partner Center → *Product identity* as repository variables (or environment variables for the scripts): `MSIX_IDENTITY_NAME` (e.g. `12345SMIC.KetworkScanner`), `MSIX_PUBLISHER` (`CN=…` GUID form) and `MSIX_PUBLISHER_DISPLAY`. Store packages are uploaded **unsigned** (Microsoft signs them). For a local sideload test, sign with a certificate whose subject equals the Publisher (`-PfxPath`, or secrets `MSIX_PFX_BASE64`/`MSIX_PFX_PASSWORD` in CI) and run `Add-AppxPackage`. The Store build keeps its user data in the package-private `%LOCALAPPDATA%\Packages\…` redirection of `%APPDATA%`, so it does not share data with the Velopack install; the passive listener needs Npcap installed separately.
+
 ## Releases
 
 Pushing a `v*.*.*` tag runs `.github/workflows/release.yml`, which runs the tests, then builds GUI installers for six RIDs, CLI + service archives, two multi-arch Docker images (`netscan` CLI and `netscan-collector`), and attaches everything to a GitHub Release. If these repository secrets exist the binaries are signed (and notarized on macOS): `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`, `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_KEYCHAIN_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. `build-and-test.yml` builds the solution and runs the Core and CLI tests on Windows, macOS and Linux for every push (collector tests and a vulnerable-package check on Linux) and builds both Docker images; the Velopack packaging job runs only on manual dispatch.

@@ -2,6 +2,9 @@
 
 ## Unreleased (2.1.0) — commercial feature set
 
+### Added (Microsoft Store)
+- MSIX packaging for the Store: manifest template and logo set under `KetworkScanner.Avalonia/Package/`, `tools/build-msix.ps1` (makeappx/signtool) and `tools/build-msix.sh` (MSIX SDK makemsix), a `StoreBuild` flag that disables Velopack self-update in the Store build, and a release job that produces x64/arm64 packages and an msixbundle.
+
 ### Renamed
 - The product is now **KetworkScanner**: solution, projects, namespaces, assembly names (`KetworkScanner.Avalonia`), Velopack package id, window/package titles, documentation and the GitHub repository (`MinaryHub/KetworkScanner`). The CLI, service and collector binaries keep their `netscan*` names. User data moves to the `KetworkScanner` folder (`%APPDATA%\KetworkScanner`, `~/Library/Application Support/KetworkScanner`, `~/.config/KetworkScanner`); settings, history, secrets, outbox, backups and reference data are copied from the old `NetworkScanner` folder on first start, and Keychain/libsecret entries saved under the old service name are still read. Installed GUI copies of the old package id are not updated automatically: install the new package once.
 

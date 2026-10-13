@@ -291,9 +291,44 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/netscan-collector:${{ needs.version.outputs.value }}
             ghcr.io/${{ github.repository_owner }}/netscan-collector:latest
 
+  # MS Store 제출용 MSIX(x64 + arm64 → msixbundle). Identity 값은 저장소 변수(Settings → Variables)로 넣는다:
+  #   MSIX_IDENTITY_NAME, MSIX_PUBLISHER, MSIX_PUBLISHER_DISPLAY (Partner Center → Product identity).
+  # 비어 있으면 사이드로드 테스트용 기본값(SMIC.KetworkScanner / CN=SMIC)으로 만든다. Store 제출본은 서명하지 않는다;
+  # 사이드로드용 서명이 필요하면 secrets MSIX_PFX_BASE64 / MSIX_PFX_PASSWORD 를 두면 된다.
+  msix:
+    name: MSIX (Store)
+    needs: [version, test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build MSIX packages and bundle
+        shell: pwsh
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY: ${{ vars.MSIX_PUBLISHER_DISPLAY }}
+          MSIX_VERSION: ${{ needs.version.outputs.value }}.0
+          MSIX_PFX_BASE64: ${{ secrets.MSIX_PFX_BASE64 }}
+          MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: |
+          $args = @{ Rid = @("win-x64", "win-arm64"); Bundle = $true; OutDir = "release-packages/msix" }
+          if ($env:MSIX_PFX_BASE64) {
+            [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\sideload.pfx", [Convert]::FromBase64String($env:MSIX_PFX_BASE64))
+            $args.PfxPath = "$env:RUNNER_TEMP\sideload.pfx"; $args.PfxPassword = $env:MSIX_PFX_PASSWORD
+          }
+          pwsh tools/build-msix.ps1 @args
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msix
+          path: release-packages/msix/*.msix*
+          if-no-files-found: error
+
   release:
     name: Create GitHub Release
-    needs: [version, package, headless, docker, docker-collector]
+    needs: [version, package, headless, docker, docker-collector, msix]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

@@ -265,7 +265,7 @@
             <!-- 자동 업데이트: 확인 주기, 백그라운드 다운로드, 종료 시 자동 설치, beta 채널. -->
             <Border Classes="card">
                 <StackPanel Spacing="8">
-                    <WrapPanel>
+                    <WrapPanel Name="PnlAppUpdate">
                         <TextBlock Classes="section" VerticalAlignment="Center" Margin="0,0,16,0" Text="{l:Tr Key=settings.update}" />
                         <CheckBox Name="ChkUpdateAutoCheck" Content="{l:Tr Key=settings.update.autocheck}" Margin="0,0,16,0" IsCheckedChanged="ChkUpdateAutoCheck_Changed" />
                         <CheckBox Name="ChkUpdateAutoDownload" Content="{l:Tr Key=settings.update.autodownload}" Margin="0,0,16,0" />

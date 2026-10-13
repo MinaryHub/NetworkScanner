@@ -12,6 +12,9 @@
     <RollForward>LatestMajor</RollForward>
     <!-- 릴리즈 태그 push 시 release.yml이 -p:Version=으로 실제 태그 버전을 덮어써 반영한다. -->
     <Version>2.1.0</Version>
+    <!-- MS Store(MSIX) 빌드: -p:StoreBuild=true. Velopack 자체 업데이트를 끈다(Store 가 갱신하고 설치 폴더는 읽기 전용). -->
+    <StoreBuild Condition="'$(StoreBuild)' == ''">false</StoreBuild>
+    <DefineConstants Condition="'$(StoreBuild)' == 'true'">$(DefineConstants);STORE_BUILD</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

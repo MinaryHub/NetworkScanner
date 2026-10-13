@@ -91,7 +91,13 @@ public partial class MainWindow : Window, IScanConfigProvider
             _ipListView.GetLatestFilePath(GetSystemName());
         }
 
+#if STORE_BUILD
+        // Store 빌드: 앱 자체 업데이트는 Microsoft Store 가 맡는다. 관련 UI 를 숨기고 확인도 하지 않는다.
+        BtnUpdate.IsVisible = false;
+        _settingsView.HideAppUpdateControls();
+#else
         InitUpdates(startup);
+#endif
         InitReferenceData(startup);
         _ = FlushOutboxAsync();
         if (!startup.UsageNoticeAccepted) _ = ShowUsageNoticeAsync();

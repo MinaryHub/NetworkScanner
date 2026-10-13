@@ -584,6 +584,13 @@ namespace KetworkScanner.Avalonia.Views
         // MainWindow가 구독해 실제 확인을 수행한다(업데이트 관리자는 창이 소유).
         public event Action? UpdateCheckRequested;
         public void ShowUpdateStatus(string text) => TbUpdateStatus.Text = text;
+
+        // Store(MSIX) 빌드에서 호출: 앱 자체 업데이트 설정 줄을 숨긴다(참조 데이터 갱신 줄은 그대로).
+        public void HideAppUpdateControls()
+        {
+            PnlAppUpdate.IsVisible = false;
+            TbUpdateStatus.IsVisible = false;
+        }
         private void BtnUpdateCheck_Click(object? sender, RoutedEventArgs e) => UpdateCheckRequested?.Invoke();
 
         private async void BtnDiag_Click(object? sender, RoutedEventArgs e)
