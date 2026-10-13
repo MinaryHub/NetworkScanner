@@ -26,7 +26,7 @@ namespace KetworkScanner.Tests
 
         public void Dispose()
         {
-            UserDataPaths.OverrideRoot = null;
+            UserDataPaths.OverrideRoot = TestEnvironment.Root;
             try { Directory.Delete(_root, true); } catch { }
         }
 

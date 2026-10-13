@@ -14,7 +14,7 @@ namespace KetworkScanner.Tests
         private readonly string _root = Path.Combine(Path.GetTempPath(), "nstest-upload-" + Guid.NewGuid().ToString("N"));
 
         public UploadAndNotifyTests() { Directory.CreateDirectory(_root); UserDataPaths.OverrideRoot = _root; }
-        public void Dispose() { UserDataPaths.OverrideRoot = null; try { Directory.Delete(_root, true); } catch { } }
+        public void Dispose() { UserDataPaths.OverrideRoot = TestEnvironment.Root; try { Directory.Delete(_root, true); } catch { } }
 
         private sealed class FlakyUploader : IResultUploader
         {

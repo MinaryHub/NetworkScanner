@@ -33,7 +33,7 @@ namespace KetworkScanner.Tests
         public void Dispose()
         {
             ReferenceDataUpdater.BundledResolver = _oldResolver;
-            UserDataPaths.OverrideRoot = null;
+            UserDataPaths.OverrideRoot = TestEnvironment.Root;
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
