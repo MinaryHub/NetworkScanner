@@ -5,8 +5,8 @@
 #   sh tools/build-msix.sh [win-x64|win-arm64] [출력 폴더]
 #
 # 환경 변수(Partner Center 의 Product identity 값; 비우면 사이드로드 테스트용 기본값):
-#   MSIX_IDENTITY_NAME   (예: 12345SMIC.KetworkScanner)   기본 SMIC.KetworkScanner
-#   MSIX_PUBLISHER       (예: CN=0A1B2C3D-...)             기본 CN=SMIC
+#   MSIX_IDENTITY_NAME   (예: 12345SMIC.KetworkScanner)   기본 minary.KetworkScanner
+#   MSIX_PUBLISHER       (예: CN=0A1B2C3D-...)             기본 CN=C460CD23-2642-4BA2-A332-6F8ADBE54E1F
 #   MSIX_PUBLISHER_DISPLAY                                 기본 minary
 #   MSIX_VERSION         (x.y.z.0)                         기본 csproj 의 <Version>.0
 #   MAKEMSIX             makemsix 실행 파일 경로            기본 PATH 에서 찾음
@@ -22,8 +22,8 @@ esac
 PROJ="$ROOT/KetworkScanner.Avalonia/KetworkScanner.Avalonia.csproj"
 CSPROJ_VERSION=$(sed -n 's#.*<Version>\([0-9.]*\)</Version>.*#\1#p' "$PROJ" | head -1)
 VERSION=${MSIX_VERSION:-"$CSPROJ_VERSION.0"}
-IDENTITY=${MSIX_IDENTITY_NAME:-SMIC.KetworkScanner}
-PUBLISHER=${MSIX_PUBLISHER:-CN=SMIC}
+IDENTITY=${MSIX_IDENTITY_NAME:-minary.KetworkScanner}
+PUBLISHER=${MSIX_PUBLISHER:-CN=C460CD23-2642-4BA2-A332-6F8ADBE54E1F}
 PUBLISHER_DISPLAY=${MSIX_PUBLISHER_DISPLAY:-minary}
 MAKEMSIX=${MAKEMSIX:-makemsix}
 
