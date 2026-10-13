@@ -7,7 +7,7 @@
 # 환경 변수(Partner Center 의 Product identity 값; 비우면 사이드로드 테스트용 기본값):
 #   MSIX_IDENTITY_NAME   (예: 12345SMIC.KetworkScanner)   기본 SMIC.KetworkScanner
 #   MSIX_PUBLISHER       (예: CN=0A1B2C3D-...)             기본 CN=SMIC
-#   MSIX_PUBLISHER_DISPLAY                                 기본 SMIC
+#   MSIX_PUBLISHER_DISPLAY                                 기본 minary
 #   MSIX_VERSION         (x.y.z.0)                         기본 csproj 의 <Version>.0
 #   MAKEMSIX             makemsix 실행 파일 경로            기본 PATH 에서 찾음
 set -eu
@@ -24,7 +24,7 @@ CSPROJ_VERSION=$(sed -n 's#.*<Version>\([0-9.]*\)</Version>.*#\1#p' "$PROJ" | he
 VERSION=${MSIX_VERSION:-"$CSPROJ_VERSION.0"}
 IDENTITY=${MSIX_IDENTITY_NAME:-SMIC.KetworkScanner}
 PUBLISHER=${MSIX_PUBLISHER:-CN=SMIC}
-PUBLISHER_DISPLAY=${MSIX_PUBLISHER_DISPLAY:-SMIC}
+PUBLISHER_DISPLAY=${MSIX_PUBLISHER_DISPLAY:-minary}
 MAKEMSIX=${MAKEMSIX:-makemsix}
 
 STAGE=$(mktemp -d)
@@ -36,6 +36,7 @@ dotnet publish "$PROJ" -c Release -r "$RID" --self-contained -p:StoreBuild=true 
 PKG="$STAGE/pkg"
 mkdir -p "$PKG/Assets"
 cp -R "$STAGE/app/." "$PKG/"
+# Store 검사기는 매니페스트에 적힌 그대로의 파일명(StoreLogo.png 등)을 요구한다. scale-/targetsize- 변형은 덤이다.
 cp "$ROOT/KetworkScanner.Avalonia/Package/Assets/"*.png "$PKG/Assets/"
 find "${PKG:?}" -maxdepth 1 -name '*.pdb' -delete
 sed -e "s#__IDENTITY_NAME__#$IDENTITY#" -e "s#__PUBLISHER__#$PUBLISHER#" -e "s#__PUBLISHER_DISPLAY__#$PUBLISHER_DISPLAY#" \

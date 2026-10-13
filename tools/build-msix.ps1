@@ -13,7 +13,7 @@ param(
   [string]$OutDir = (Join-Path $PSScriptRoot "..\release-packages\msix"),
   [string]$IdentityName = $(if ($env:MSIX_IDENTITY_NAME) { $env:MSIX_IDENTITY_NAME } else { "SMIC.KetworkScanner" }),
   [string]$Publisher = $(if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { "CN=SMIC" }),
-  [string]$PublisherDisplay = $(if ($env:MSIX_PUBLISHER_DISPLAY) { $env:MSIX_PUBLISHER_DISPLAY } else { "SMIC" }),
+  [string]$PublisherDisplay = $(if ($env:MSIX_PUBLISHER_DISPLAY) { $env:MSIX_PUBLISHER_DISPLAY } else { "minary" }),
   [string]$Version = $env:MSIX_VERSION,
   [switch]$Bundle,
   [string]$PfxPath,

@@ -293,7 +293,7 @@ jobs:
 
   # MS Store 제출용 MSIX(x64 + arm64 → msixbundle). Identity 값은 저장소 변수(Settings → Variables)로 넣는다:
   #   MSIX_IDENTITY_NAME, MSIX_PUBLISHER, MSIX_PUBLISHER_DISPLAY (Partner Center → Product identity).
-  # 비어 있으면 사이드로드 테스트용 기본값(SMIC.KetworkScanner / CN=SMIC)으로 만든다. Store 제출본은 서명하지 않는다;
+  # 비어 있으면 사이드로드 테스트용 기본값(SMIC.KetworkScanner / CN=SMIC / minary)으로 만든다. Store 제출본은 서명하지 않는다;
   # 사이드로드용 서명이 필요하면 secrets MSIX_PFX_BASE64 / MSIX_PFX_PASSWORD 를 두면 된다.
   msix:
     name: MSIX (Store)
