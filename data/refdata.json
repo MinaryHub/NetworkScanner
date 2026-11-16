@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-09",
+  "generated": "2026-11-16",
   "files": [
     {
       "name": "reservedports.ini",
@@ -21,21 +21,21 @@
     },
     {
       "name": "ouiinfo.ini",
-      "version": "2026-11-09",
-      "sha256": "5b244af71265e31f60aaeb7da8e9c259b7b30e8330dc579dc58ed7977218cb42",
-      "size": 6644606
+      "version": "2026-11-16",
+      "sha256": "f50242a24e5a35fcb2544c6373f23308ac7ca6cd49f29037692af482903e37b0",
+      "size": 6652076
     },
     {
       "name": "ouiinfo-mam.ini",
-      "version": "2026-11-09",
-      "sha256": "a23895eefb52af123d47900318f11a9d44b5b39702bb38057676663d323f4a07",
-      "size": 1277879
+      "version": "2026-11-16",
+      "sha256": "72da1d49ec80852537ae90c27794971e83985f802f833b9ba253023e5bd42624",
+      "size": 1280109
     },
     {
       "name": "ouiinfo-mas.ini",
-      "version": "2026-11-09",
-      "sha256": "9dac5257e2b7a091512d159947da4d8116071a829737479213fc7009f9c4b4a9",
-      "size": 1192070
+      "version": "2026-11-16",
+      "sha256": "98bf911f181ed157ae211f14a86417913092c9eb9280557f81487e4efca5d4c9",
+      "size": 1194119
     }
   ]
 }
