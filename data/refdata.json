@@ -1,11 +1,11 @@
 {
-  "generated": "2026-11-16",
+  "generated": "2026-11-23",
   "files": [
     {
       "name": "reservedports.ini",
-      "version": "2026-11-09",
-      "sha256": "efab303444a2b865e59b06150d78b14bf6b072886ce864fb1b33123c1e3cb5b0",
-      "size": 185001
+      "version": "2026-11-23",
+      "sha256": "911414fc6d8ff0c0f7c312a6afd32f27df9aa8406c35e7d54027f4b9e67bfdbb",
+      "size": 185036
     },
     {
       "name": "prohibitports.ini",
@@ -21,21 +21,21 @@
     },
     {
       "name": "ouiinfo.ini",
-      "version": "2026-11-16",
-      "sha256": "f50242a24e5a35fcb2544c6373f23308ac7ca6cd49f29037692af482903e37b0",
-      "size": 6652076
+      "version": "2026-11-23",
+      "sha256": "589aa00fdbdaeac0d352d6623ffe1bf4a8591c24b7478a28aeb5e55f7462967c",
+      "size": 6658506
     },
     {
       "name": "ouiinfo-mam.ini",
-      "version": "2026-11-16",
-      "sha256": "72da1d49ec80852537ae90c27794971e83985f802f833b9ba253023e5bd42624",
-      "size": 1280109
+      "version": "2026-11-23",
+      "sha256": "1fa00c019d1246709a8ee3304857262e3eeea7afa106b69985e95d77f5dc6b20",
+      "size": 1281102
     },
     {
       "name": "ouiinfo-mas.ini",
-      "version": "2026-11-16",
-      "sha256": "98bf911f181ed157ae211f14a86417913092c9eb9280557f81487e4efca5d4c9",
-      "size": 1194119
+      "version": "2026-11-23",
+      "sha256": "a9163145de38e0e1f2ef49a99b3f87a171e467e049f42216bd2fbc63eabb0656",
+      "size": 1196947
     }
   ]
 }
